@@ -4,7 +4,8 @@ from esphome import automation
 from esphome.automation import Condition
 import esphome.codegen as cg
 from esphome.components.const import CONF_USE_PSRAM
-from esphome.components.esp32 import add_idf_sdkconfig_option, const, get_esp32_variant
+from esphome.components.esp32 import add_idf_sdkconfig_option, get_esp32_variant
+from esphome.components.esp32.const import VARIANT_ESP32H2, VARIANT_ESP32P4
 from esphome.components.network import (
     has_high_performance_networking,
     ip_address_literal,
@@ -61,7 +62,7 @@ AUTO_LOAD = ["network"]
 
 _LOGGER = logging.getLogger(__name__)
 
-NO_WIFI_VARIANTS = [const.VARIANT_ESP32H2, const.VARIANT_ESP32P4]
+NO_WIFI_VARIANTS = [VARIANT_ESP32H2, VARIANT_ESP32P4]
 CONF_SAVE = "save"
 CONF_MIN_AUTH_MODE = "min_auth_mode"
 CONF_POST_CONNECT_ROAMING = "post_connect_roaming"

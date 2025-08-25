@@ -3,7 +3,8 @@ import logging
 from esphome import pins
 import esphome.codegen as cg
 from esphome.components import esp32
-from esphome.components.esp32 import (
+from esphome.components.esp32 import get_esp32_variant
+from esphome.components.esp32.const import (
     VARIANT_ESP32,
     VARIANT_ESP32C2,
     VARIANT_ESP32C3,
@@ -14,7 +15,6 @@ from esphome.components.esp32 import (
     VARIANT_ESP32P4,
     VARIANT_ESP32S2,
     VARIANT_ESP32S3,
-    get_esp32_variant,
 )
 from esphome.components.esp32.gpio_esp32_c5 import esp32_c5_validate_lp_i2c
 from esphome.components.esp32.gpio_esp32_c6 import esp32_c6_validate_lp_i2c

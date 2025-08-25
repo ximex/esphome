@@ -12,7 +12,8 @@ from esphome.components.const import (
     CONF_DRAW_ROUNDING,
 )
 from esphome.components.display import CONF_SHOW_TEST_CARD
-from esphome.components.esp32 import VARIANT_ESP32P4, only_on_variant
+from esphome.components.esp32 import only_on_variant
+from esphome.components.esp32.const import VARIANT_ESP32P4
 from esphome.components.mipi import (
     COLOR_ORDERS,
     CONF_COLOR_DEPTH,

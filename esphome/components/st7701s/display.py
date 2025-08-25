@@ -1,7 +1,8 @@
 from esphome import pins
 import esphome.codegen as cg
 from esphome.components import display, spi
-from esphome.components.esp32 import VARIANT_ESP32S3, only_on_variant
+from esphome.components.esp32 import only_on_variant
+from esphome.components.esp32.const import VARIANT_ESP32S3
 from esphome.components.mipi import (
     CONF_DE_PIN,
     CONF_HSYNC_BACK_PORCH,

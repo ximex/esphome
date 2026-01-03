@@ -1,0 +1,27 @@
+---
+esphome:
+  name: test
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+uart:
+  id: uart_bus
+  tx_pin: 17
+  rx_pin: 16
+  baud_rate: 9600
+
+benq:
+  id: benq_hub
+  model: SP840
+
+sensor:
+  - platform: benq
+    id: lamp_hours
+    name: Lamp Hours
+    command: LAMP_TIME
+    unit_of_measurement: min
+    accuracy_decimals: 2
+    state_class: measurement

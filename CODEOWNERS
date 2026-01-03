@@ -65,6 +65,13 @@ esphome/components/bedjet/climate/* @jhansche
 esphome/components/bedjet/fan/* @jhansche
 esphome/components/bedjet/sensor/* @javawizard @jhansche
 esphome/components/beken_spi_led_strip/* @Mat931
+esphome/components/benq/* @ximex
+esphome/components/benq/button/* @ximex
+esphome/components/benq/media_player/* @ximex
+esphome/components/benq/number/* @ximex
+esphome/components/benq/select/* @ximex
+esphome/components/benq/sensor/* @ximex
+esphome/components/benq/switch/* @ximex
 esphome/components/bh1750/* @OttoWinter
 esphome/components/bh1900nux/* @B48D81EFCC
 esphome/components/binary_sensor/* @esphome/core

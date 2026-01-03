@@ -1,0 +1,72 @@
+benq:
+  model: SP840
+  update_interval: 60s
+
+switch:
+  - platform: benq
+    name: "Projector Power"
+    command: POWER
+
+  - platform: benq
+    name: "Blank Screen"
+    command: BLANK
+
+  - platform: benq
+    name: "Mute Audio"
+    command: MUTE
+
+  - platform: benq
+    name: "Freeze Image"
+    command: FREEZE
+
+select:
+  - platform: benq
+    name: "Input Source"
+    command: SOURCE
+
+  - platform: benq
+    name: "Picture Mode"
+    command: PICTURE_MODE
+
+  - platform: benq
+    name: "Lamp Mode"
+    command: LAMP_MODE
+
+number:
+  - platform: benq
+    name: "Volume"
+    command: VOLUME
+
+  - platform: benq
+    name: "Brightness"
+    command: BRIGHTNESS
+
+  - platform: benq
+    name: "Contrast"
+    command: CONTRAST
+
+  - platform: benq
+    name: "Sharpness"
+    command: SHARPNESS
+
+sensor:
+  - platform: benq
+    name: "Lamp Hours"
+    command: LAMP_TIME
+
+button:
+  - platform: benq
+    name: "Menu Up"
+    command: UP
+
+  - platform: benq
+    name: "Menu Enter"
+    command: ENTER
+
+  - platform: benq
+    name: "Auto Adjust"
+    command: AUTO
+
+  - platform: benq
+    name: "Reset Lamp Hours"
+    command: LAMP_HOUR_RESET

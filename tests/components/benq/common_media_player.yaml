@@ -1,0 +1,17 @@
+benq:
+  model: SP840
+
+media_player:
+  - platform: benq
+    name: "BenQ Projector"
+
+# Can still use individual entities alongside media_player
+switch:
+  - platform: benq
+    name: "Blank Screen"
+    command: BLANK
+
+number:
+  - platform: benq
+    name: "Brightness"
+    command: BRIGHTNESS

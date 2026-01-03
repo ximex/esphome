@@ -1,0 +1,15 @@
+benq:
+  model: SP840
+
+switch:
+  - platform: benq
+    name: "Projector Power"
+    command: POWER
+
+  - platform: benq
+    name: "Blank Screen"
+    command: BLANK
+
+  - platform: benq
+    name: "Mute Audio"
+    command: MUTE

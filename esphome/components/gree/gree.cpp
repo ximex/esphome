@@ -46,6 +46,14 @@ void GreeClimate::transmit_state() {
   remote_state[0] = this->fan_speed_() | this->operation_mode_();
   remote_state[1] = this->temperature_();
 
+  if (this->model_ == GREE_SINCLAIR) {
+    if (this->vertical_swing_() == GREE_VDIR_SWING) {
+      remote_state[0] |= (1 << 6);
+    }
+    remote_state[1] &= ~0x10;
+    remote_state[3] = 0x50;
+  }
+
   if (this->model_ == GREE_YAN) {
     remote_state[2] = 0x20;  // bits 0..3 always 0000, bits 4..7 TURBO, LIGHT, HEALTH, X-FAN
     remote_state[3] = 0x50;  // bits 4..7 always 0101
@@ -115,43 +123,49 @@ void GreeClimate::transmit_state() {
   data->set_carrier_frequency(GREE_IR_FREQUENCY);
 
   data->mark(GREE_HEADER_MARK);
-  if (this->model_ == GREE_YAC1FB9) {
+  if (this->model_ == GREE_YAC1FB9 || this->model_ == GREE_SINCLAIR) {
     data->space(GREE_YAC1FB9_HEADER_SPACE);
   } else {
     data->space(GREE_HEADER_SPACE);
   }
 
+  uint32_t bit_mark = (this->model_ == GREE_SINCLAIR) ? GREE_SINCLAIR_BIT_MARK : GREE_BIT_MARK;
+  uint32_t one_space = (this->model_ == GREE_SINCLAIR) ? GREE_SINCLAIR_ONE_SPACE : GREE_ONE_SPACE;
+  uint32_t zero_space = (this->model_ == GREE_SINCLAIR) ? GREE_SINCLAIR_ZERO_SPACE : GREE_ZERO_SPACE;
+
   for (int i = 0; i < 4; i++) {
     for (uint8_t mask = 1; mask > 0; mask <<= 1) {  // iterate through bit mask
-      data->mark(GREE_BIT_MARK);
+      data->mark(bit_mark);
       bool bit = remote_state[i] & mask;
-      data->space(bit ? GREE_ONE_SPACE : GREE_ZERO_SPACE);
+      data->space(bit ? one_space : zero_space);
     }
   }
 
-  data->mark(GREE_BIT_MARK);
-  data->space(GREE_ZERO_SPACE);
-  data->mark(GREE_BIT_MARK);
-  data->space(GREE_ONE_SPACE);
-  data->mark(GREE_BIT_MARK);
-  data->space(GREE_ZERO_SPACE);
+  data->mark(bit_mark);
+  data->space(zero_space);
+  data->mark(bit_mark);
+  data->space(one_space);
+  data->mark(bit_mark);
+  data->space(zero_space);
 
-  data->mark(GREE_BIT_MARK);
-  if (this->model_ == GREE_YAC1FB9) {
-    data->space(GREE_YAC1FB9_MESSAGE_SPACE);
-  } else {
-    data->space(GREE_MESSAGE_SPACE);
-  }
+  if (this->model_ != GREE_SINCLAIR) {
+    data->mark(bit_mark);
+    if (this->model_ == GREE_YAC1FB9) {
+      data->space(GREE_YAC1FB9_MESSAGE_SPACE);
+    } else {
+      data->space(GREE_MESSAGE_SPACE);
+    }
 
-  for (int i = 4; i < 8; i++) {
-    for (uint8_t mask = 1; mask > 0; mask <<= 1) {  // iterate through bit mask
-      data->mark(GREE_BIT_MARK);
-      bool bit = remote_state[i] & mask;
-      data->space(bit ? GREE_ONE_SPACE : GREE_ZERO_SPACE);
+    for (int i = 4; i < 8; i++) {
+      for (uint8_t mask = 1; mask > 0; mask <<= 1) {  // iterate through bit mask
+        data->mark(bit_mark);
+        bool bit = remote_state[i] & mask;
+        data->space(bit ? one_space : zero_space);
+      }
     }
   }
 
-  data->mark(GREE_BIT_MARK);
+  data->mark(bit_mark);
   data->space(0);
 
   transmit.perform();

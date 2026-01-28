@@ -43,6 +43,11 @@ static constexpr uint32_t GREE_YAC_BIT_MARK = 650;
 static constexpr uint32_t GREE_YAC1FB9_HEADER_SPACE = 4500;
 static constexpr uint32_t GREE_YAC1FB9_MESSAGE_SPACE = 19980;
 
+// Timing specific to Sinclair
+static constexpr uint32_t GREE_SINCLAIR_BIT_MARK = 560;
+static constexpr uint32_t GREE_SINCLAIR_ONE_SPACE = 1690;
+static constexpr uint32_t GREE_SINCLAIR_ZERO_SPACE = 560;
+
 // State Frame size
 static constexpr uint8_t GREE_STATE_FRAME_SIZE = 8;
 
@@ -77,7 +82,7 @@ static constexpr uint8_t GREE_PRESET_SLEEP = 0x01;
 static constexpr uint8_t GREE_PRESET_SLEEP_BIT = 0x80;
 
 // Model codes
-enum Model { GREE_GENERIC, GREE_YAN, GREE_YAA, GREE_YAC, GREE_YAC1FB9, GREE_YX1FF, GREE_YAG };
+enum Model { GREE_GENERIC, GREE_YAN, GREE_YAA, GREE_YAC, GREE_YAC1FB9, GREE_YX1FF, GREE_YAG, GREE_SINCLAIR };
 
 class GreeClimate final : public climate_ir::ClimateIR {
  public:
@@ -85,8 +90,8 @@ class GreeClimate final : public climate_ir::ClimateIR {
       : climate_ir::ClimateIR(GREE_TEMP_MIN, GREE_TEMP_MAX, 1.0f, true, true,
                               {climate::CLIMATE_FAN_AUTO, climate::CLIMATE_FAN_LOW, climate::CLIMATE_FAN_MEDIUM,
                                climate::CLIMATE_FAN_HIGH},
-                              {climate::CLIMATE_SWING_OFF, climate::CLIMATE_SWING_VERTICAL,
-                               climate::CLIMATE_SWING_HORIZONTAL, climate::CLIMATE_SWING_BOTH}) {}
+                              {climate::CLIMATE_SWING_OFF, climate::CLIMATE_SWING_VERTICAL}) {}
+  // TODO: ClimateSwingModeMask
 
   void set_model(Model model);
   void set_mode_bit(uint8_t bit_mask, bool enabled);

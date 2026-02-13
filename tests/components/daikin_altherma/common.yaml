@@ -1,0 +1,35 @@
+daikin_altherma:
+  outdoor_temperature:
+    name: Outdoor Temperature
+  leaving_water_temperature:
+    name: Leaving Water Temperature
+  return_water_temperature:
+    name: Return Water Temperature
+  dhw_temperature:
+    name: DHW Temperature
+  dhw_setpoint:
+    name: DHW Setpoint
+  leaving_water_setpoint:
+    name: Leaving Water Setpoint
+  compressor_frequency:
+    name: Compressor Frequency
+  fan_speed:
+    name: Fan Speed
+  expansion_valve_pulses:
+    name: Expansion Valve Pulses
+  flow_rate:
+    name: Flow Rate
+  pump_speed:
+    name: Pump Speed
+  operation_mode:
+    name: Operation Mode
+  water_pump:
+    name: Water Pump
+  three_way_valve:
+    name: Three Way Valve
+  backup_heater:
+    name: Backup Heater
+  space_heating:
+    name: Space Heating
+  powerful_dhw:
+    name: Powerful DHW

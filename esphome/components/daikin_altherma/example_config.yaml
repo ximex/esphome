@@ -1,0 +1,324 @@
+# Daikin Altherma Heat Pump - Complete Configuration Example
+# Protocol I communication via UART (9600 8E1)
+substitutions:
+  name: altherma
+  friendly_name: "Altherma"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  devices:
+    - id: indoor_device
+      name: "Innengerät (ELBH12EF9W)"
+    - id: outdoor_device
+      name: "Außengerät (ERRA08-12E)"
+    - id: domestic_hot_water_tank
+      name: "Warmwasserspeicher"
+
+uart:
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 9600
+  parity: EVEN
+
+daikin_altherma:
+  update_interval: 15s
+
+  # Register 0x00
+  raw_0x00:  # 0x00 raw
+    name: "Raw 0x00"
+
+  # Register 0x10
+  operation_mode:  # 0x10[0]
+    name: "Operation Mode"
+  thermostat_on:  # 0x10[1] bit7
+    name: "Thermostat ON"
+  restart_standby:  # 0x10[1] bit6
+    name: "Restart Standby"
+  startup_control:  # 0x10[1] bit5
+    name: "Startup Control"
+  defrost_operation:  # 0x10[1] bit4
+    name: "Defrost Operation"
+  oil_return_operation:  # 0x10[1] bit3
+    name: "Oil Return Operation"
+  pressure_equalizing:  # 0x10[1] bit2
+    name: "Demand Signal"
+  low_noise_control:  # 0x10[1] bit0
+    name: "Pressure Equalizing"
+  demand_signal:  # 0x10[1] bit1
+    name: "Low Noise Control"
+  hp_drop_control:  # 0x10[11] bit7
+    name: "HP Drop Control"
+  error_type:  # 0x10[4]
+    name: "0x10 Error Type"
+  error_code:  # 0x10[5]
+    name: "0x10 Error Code"
+  target_evaporator_temperature:  # 0x10[6:7]
+    name: "Target Evaporator Temperature"
+  target_cond_temperature:  # 0x10[8:9]
+    name: "Target Cond. Temperature"
+  0x10_11_flags:  # 0x10[11] flags
+    name: "0x10 Byte 11 Flags"
+  raw_0x10:  # 0x10 raw
+    name: "Raw 0x10"
+
+  # Register 0x11
+  raw_0x11:  # 0x11 raw
+    name: "Raw 0x11"
+
+  # Register 0x20
+  outdoor_air_temperature:  # 0x20[0:1]
+    name: "Outdoor Air Temperature"
+  0x20_outdoor_heat_exchanger_temperature:  # 0x20[2:3]
+    name: "0x20 Outdoor Heat Exchanger Temperature"
+  discharge_pipe_temperature:  # 0x20[4:5]
+    name: "Discharge Pipe Temperature"
+  suction_pipe_temperature:  # 0x20[6:7]
+    name: "Suction Pipe Temperature"
+  outdoor_heat_exchanger_mid_temperature:  # 0x20[8:9]
+    name: "Outdoor Heat Exchanger Mid Temperature"
+  0x20_liquid_pipe_temperature:  # 0x20[10:11]
+    name: "0x20 Liquid Pipe Temperature"
+  0x20_1213_unknown:  # 0x20[12:13]
+    name: "0x20 Unknown Temperature|Pressure"
+  0x20_low_pressure:  # 0x20[14:15]
+    name: "0x20 Low Pressure"
+  0x20_16_unknown:  # 0x20[16]
+    name: "0x20 Byte 16 Unknown"
+  raw_0x20:  # 0x20 raw (Full supported)
+    name: "Raw 0x20"
+    disabled_by_default: true
+
+  # Register 0x21
+  inv_primary_current:  # 0x21[0:1]
+    name: "INV Primary Current"
+  inv_secondary_current:  # 0x21[2:3]
+    name: "INV Secondary Current"
+  inv_fin_temperature:  # 0x21[4:5]
+    name: "INV Fin Temperature"
+  0x21_1213_unknown:  # 0x21[12:13]
+    name: "0x21 Byte 12-13 Unknown"
+  raw_0x21:  # 0x21 raw
+    name: "Raw 0x21"
+
+  # Register 0x30
+  compressor_frequency:  # 0x30[0]
+    name: "Compressor Frequency"
+  fan_speed:  # 0x30[1]
+    name: "Fan Speed"
+  expansion_valve_pulses:  # 0x30[3:4]
+    name: "Expansion Valve Pulses"
+  0x30_05_unknown:  # 0x30[5]
+    name: "0x30 Byte 5 Unknown"
+  four_way_valve:
+    name: "Four Way Valve"
+  y3s:  # 0x30[13] bit5
+    name: "Y3S"
+  y2s:  # 0x30[13] bit6
+    name: "LP Bypass Valve (Y2S)"
+  hot_gas_bypass_valve:  # 0x30[13] bit7
+    name: "Hot Gas Bypass Valve (Y3S)"
+  0x30_11_flags:  # 0x30[11] flags
+    name: "0x30 Byte 11 Flags"
+  0x30_13_flags:  # 0x30[13] flags
+    name: "0x30 Byte 13 Flags"
+  raw_0x30:  # 0x30 raw
+    name: "Raw 0x30"
+
+  # Register 0x60
+  0x60_data_enabled:  # 0x60[0] bit7
+    name: "0x60 Data Enabled"
+    disabled_by_default: true
+  0x60_indoor_unit_address:  # 0x60[1]
+    name: "0x60 Indoor Unit Address"
+    disabled_by_default: true
+  freeze_protection_water_piping:  # 0x60[2] bit0
+    name: "Freeze Protection Water Piping"
+  silent_mode:  # 0x60[2] bit1
+    name: "Silent Mode"
+  freeze_protection:  # 0x60[2] bit2
+    name: "Freeze Protection"
+  indoor_thermostat_on:  # 0x60[2] bit3
+    name: "Indoor Thermostat ON"
+  indoor_operation_mode:  # 0x60[2] bit4-7
+    name: "Indoor Operation Mode"
+  indoor_error_code:  # 0x60[3]
+    name: "Indoor Error Code"
+  indoor_unit_code:  # 0x60[4]
+    name: "Indoor Unit Code"
+  indoor_error_type:  # 0x60[5]
+    name: "Indoor Error Type"
+  indoor_unit_capacity:  # 0x60[6]
+    name: "Indoor Unit Capacity"
+  dhw_tank_setpoint:  # 0x60[7:8]
+    name: "DHW Tank Setpoint"
+  0x60_leaving_water_setpoint:  # 0x60[9:10]
+    name: "Leaving Water Setpoint (0x60)"
+  external_heat_source:  # 0x60[11] bit4
+    name: "External Heat Source"
+  thermal_protector_bsh:  # 0x60[11] bit5
+    name: "Thermal Protector BSH"
+  thermal_protector_q1l_buh:  # 0x60[11] bit6
+    name: "Thermal Protector (Q1L) BUH"
+  0x60_11_flags:  # 0x60[11] flags
+    name: "0x60 Byte 11 Flags"
+  solar_pump:  # 0x60[12] bit0
+    name: "Solar Pump"
+  water_pump:  # 0x60[12] bit1
+    name: "Water Pump"
+  bottom_plate_heater:  # 0x60[12] bit2
+    name: "Bottom Plate Heater"
+  backup_heater_step2:  # 0x60[12] bit3
+    name: "Backup Heater Step 2"
+  backup_heater_step1:  # 0x60[12] bit4
+    name: "Backup Heater Step 1"
+  booster_heater:  # 0x60[12] bit5
+    name: "Booster Heater"
+  three_four_way_valve:  # 0x60[12] bit6
+    name: "3|4-Way Valve"
+  two_three_way_valve:  # 0x60[12] bit7
+    name: "2|3-Way Valve"
+  indoor_option_code:  # 0x60[13]
+    name: "Indoor Option Code"
+  indoor_software_version:  # 0x60[14]
+    name: "Indoor Software Version"
+  indoor_eeprom_version:  # 0x60[15]
+    name: "Indoor EEPROM Version"
+  iu_eeprom_version:  # 0x60[16]
+    name: "I|U EEPROM Version"
+  raw_0x60:  # 0x60 raw (Full supported)
+    name: "Raw 0x60"
+    disabled_by_default: true
+
+  # Register 0x61
+  0x61_data_enabled:  # 0x61[0] bit7
+    name: "0x61 Data Enabled"
+    disabled_by_default: true
+  0x61_indoor_unit_address:  # 0x61[1]
+    name: "0x61 Indoor Unit Address"
+    disabled_by_default: true
+  leaving_water_temperature_before_buh:  # 0x61[2:3]
+    name: "Leaving Water Temperature Before BUH"
+  leaving_water_temperature_after_buh:  # 0x61[4:5]
+    name: "Leaving Water Temperature After BUH"
+  refrigerant_liquid_temperature:  # 0x61[6:7]
+    name: "Refrigerant Liquid Temperature"
+  inlet_water_temperature:  # 0x61[8:9]
+    name: "Inlet Water Temperature"
+  dhw_tank_temperature:  # 0x61[10:11]
+    name: "DHW Tank Temperature"
+    filters:
+      - median:
+          window_size: 7
+          send_every: 1
+  room_temperature:  # 0x61[12:13]
+    name: "Room Temperature"
+  external_ambient_temperature:  # 0x61[14:15]
+    name: "External Ambient Temperature"
+  raw_0x61:  # 0x61 raw (Full supported)
+    name: "Raw 0x61"
+    disabled_by_default: true
+
+  # Register 0x62
+  0x62_data_enabled:  # 0x62[0] bit7
+    name: "0x62 Data Enabled"
+    disabled_by_default: true
+  0x62_indoor_unit_address:  # 0x62[1]
+    name: "0x62 Indoor Unit Address"
+    disabled_by_default: true
+  space_heating:  # 0x62[2] bit3
+    name: "Space Heating"
+  powerful_dhw:  # 0x62[2] bit4
+    name: "Powerful DHW"
+  0x62_02_flags:  # 0x62[2] flags
+    name: "0x62 Byte 2 Flags"
+  0x62_leaving_water_setpoint:  # 0x62[3:4]
+    name: "Leaving Water Setpoint (0x62)"
+  room_temperature_setpoint:  # 0x62[5:6]
+    name: "Room Temperature Setpoint"
+  0x62_07_flags:  # 0x62[7] flags
+    name: "0x62 Byte 7 Flags"
+  0x62_08_flags:  # 0x62[8] flags
+    name: "0x62 Byte 8 Flags"
+  space_h_operation_output:  # 0x62[8] bit0
+    name: "Space H Operation Output"
+  0x62_08_bit5_unknown:  # 0x62[8] bit5
+    name: "0x62 Byte 8 bit5 Unknown"
+  0x62_08_bit6_unknown:  # 0x62[8] bit6
+    name: "0x62 Byte 8 bit6 Unknown"
+  0x62_08_bit7_unknown:  # 0x62[8] bit7
+    name: "0x62 Byte 8 bit7 Unknown"
+  flow_rate:  # 0x62[9:10]
+    name: "Flow Rate"
+    filters:
+      - sliding_window_moving_average:
+          window_size: 3
+          send_every: 1
+  water_pressure:  # 0x62[11]
+    name: "Water Pressure"
+  pump_speed:  # 0x62[12]
+    name: "Pump Speed"
+  raw_0x62:  # 0x62 raw
+    name: "Raw 0x62"
+
+  # Register 0x63
+  0x63_data_enabled:  # 0x63[0] bit7
+    name: "0x63 Data Enabled"
+    disabled_by_default: true
+  0x63_indoor_unit_address:  # 0x63[1]
+    name: "0x63 Indoor Unit Address"
+    disabled_by_default: true
+  raw_0x63:  # 0x63 raw
+    name: "Raw 0x63"
+
+  # Register 0x64
+  0x64_data_enabled:  # 0x64[0] bit7
+    name: "0x64 Data Enabled"
+    disabled_by_default: true
+  0x64_indoor_unit_address:  # 0x64[1]
+    name: "0x64 Indoor Unit Address"
+    disabled_by_default: true
+  0x64_0708_unknown:  # 0x64[7:8]
+    name: "0x64 Byte 7-8 Unknown"
+  0x64_09_unknown_pump:  # 0x64[9]
+    name: "0x64 Byte 9 Unknown Pump"
+  0x64_12_unknown:  # 0x64[12]
+    name: "0x64 Byte 12 Unknown"
+  raw_0x64:  # 0x64 raw
+    name: "Raw 0x64"
+
+  # Register 0x65
+  0x65_data_enabled:  # 0x65[0] bit7
+    name: "0x65 Data Enabled"
+    disabled_by_default: true
+  0x65_indoor_unit_address:  # 0x65[1]
+    name: "0x65 Indoor Unit Address"
+    disabled_by_default: true
+  outlet_water_hx_temperature:  # 0x65[2:3]
+    name: "Outlet Water HX Temperature"
+  raw_0x65:  # 0x65 raw
+    name: "Raw 0x65"
+
+  # Register 0xA0
+  suction_temperature:  # 0xA0[0:1]
+    name: "Suction Temperature"
+  0xa0_outdoor_heat_exchanger_temperature:
+    name: "Outdoor Heat Exchanger Temperature"
+  0xa0_liquid_pipe_temperature:
+    name: "Liquid Pipe Temperature"
+  0xa0_pressure:
+    name: "0xA0 Pressure"
+  expansion_valve_3:
+    name: "Expansion Valve 3"
+  compressor_port_temperature:
+    name: "Compressor Port Temperature"
+  raw_0xa0:  # 0xA0 raw
+    name: "Raw 0xA0"
+
+  # Register 0xA1
+  0xa1_04_unknown:  # 0xA1[4]
+    name: "0xA1 Byte 4 Unknown"
+  0xa1_0506_unknown:  # 0xA1[5:6]
+    name: "0xA1 Byte 5-6 Unknown"
+  raw_0xa1:  # 0xA1 raw
+    name: "Raw 0xA1"

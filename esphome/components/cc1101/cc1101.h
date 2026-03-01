@@ -91,6 +91,11 @@ class CC1101Component final : public Component,
   // Packet mode operations
   CC1101Error transmit_packet(const std::vector<uint8_t> &packet);
   void register_listener(CC1101Listener *listener) { this->listeners_.push_back(listener); }
+
+  // Async serial TX support: manual state control for io-homecontrol TX
+  void go_idle() { this->enter_idle_(); }
+  void go_rx() { this->enter_rx_(); }
+  void go_tx() { this->enter_tx_(); }
   Trigger<std::vector<uint8_t>, float, float, uint8_t> *get_packet_trigger() { return &this->packet_trigger_; }
 
  protected:

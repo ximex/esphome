@@ -403,7 +403,8 @@ CC1101Error CC1101Component::transmit_packet(const std::vector<uint8_t> &packet)
   // Transmit packet
   this->strobe_(Command::TX);
   if (!this->wait_for_state_(State::IDLE, 1000)) {
-    ESP_LOGW(TAG, "TX timeout");
+    this->read_(Register::MARCSTATE);
+    ESP_LOGW(TAG, "TX timeout (MARCSTATE=0x%02X)", this->state_.MARC_STATE);
     this->enter_idle_();
     this->enter_rx_();
     return CC1101Error::TIMEOUT;
@@ -745,9 +746,13 @@ void CC1101Component::set_packet_mode(bool value) {
     this->state_.FIFO_THR = 15;
     // Don't append status bytes to FIFO - we read from registers instead
     this->state_.APPEND_STATUS = 0;
+    // Use variable length mode so the chip knows when the packet ends
+    this->state_.LENGTH_CONFIG = static_cast<uint8_t>(LengthConfig::LENGTH_CONFIG_VARIABLE);
   } else {
     // Configure GDO0 for serial data (async serial mode)
     this->state_.GDO0_CFG = 0x0D;
+    // Restore infinite length mode for async serial framing
+    this->state_.LENGTH_CONFIG = static_cast<uint8_t>(LengthConfig::LENGTH_CONFIG_INFINITE);
   }
   if (this->initialized_) {
     if (this->gdo0_pin_ != nullptr) {

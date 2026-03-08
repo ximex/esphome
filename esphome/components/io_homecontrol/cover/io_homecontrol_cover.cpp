@@ -45,7 +45,7 @@ void IOHomecontrolCover::loop() {
 
 void IOHomecontrolCover::dump_config() {
   LOG_COVER("", "io-homecontrol Cover", this);
-  ESP_LOGCONFIG(TAG, "  Target Address: 0x%06X", this->address_);
+  ESP_LOGCONFIG(TAG, "  Source Address: 0x%06X", this->address_);
 }
 
 cover::CoverTraits IOHomecontrolCover::get_traits() {
@@ -60,7 +60,7 @@ cover::CoverTraits IOHomecontrolCover::get_traits() {
 
 void IOHomecontrolCover::control(const cover::CoverCall &call) {
   if (call.get_stop()) {
-    ESP_LOGI(TAG, "Sending STOP to 0x%06X", this->address_);
+    ESP_LOGI(TAG, "Sending STOP from 0x%06X", this->address_);
     this->parent_->send_execute(this->address_, static_cast<uint16_t>(MainParam::STOP));
     this->current_operation = cover::COVER_OPERATION_IDLE;
     this->publish_state();
@@ -72,13 +72,13 @@ void IOHomecontrolCover::control(const cover::CoverCall &call) {
 
     if (pos >= cover::COVER_OPEN) {
       // Fully open
-      ESP_LOGI(TAG, "Sending OPEN to 0x%06X", this->address_);
+      ESP_LOGI(TAG, "Sending OPEN from 0x%06X", this->address_);
       this->parent_->send_execute(this->address_, static_cast<uint16_t>(MainParam::OPEN));
       this->current_operation = cover::COVER_OPERATION_OPENING;
       this->position = cover::COVER_OPEN;
     } else if (pos <= cover::COVER_CLOSED) {
       // Fully closed
-      ESP_LOGI(TAG, "Sending CLOSE to 0x%06X", this->address_);
+      ESP_LOGI(TAG, "Sending CLOSE from 0x%06X", this->address_);
       this->parent_->send_execute(this->address_, static_cast<uint16_t>(MainParam::CLOSE));
       this->current_operation = cover::COVER_OPERATION_CLOSING;
       this->position = cover::COVER_CLOSED;
@@ -88,7 +88,7 @@ void IOHomecontrolCover::control(const cover::CoverCall &call) {
       // ESPHome cover:  1.0 = fully open,    0.0 = fully closed
       // So we invert: param = (1.0 - pos) * 0xC800
       uint16_t main_param = static_cast<uint16_t>((1.0f - pos) * static_cast<uint16_t>(MainParam::CLOSE));
-      ESP_LOGI(TAG, "Sending POSITION %.0f%% (param=0x%04X) to 0x%06X", pos * 100.0f, main_param, this->address_);
+      ESP_LOGI(TAG, "Sending POSITION %.0f%% (param=0x%04X) from 0x%06X", pos * 100.0f, main_param, this->address_);
       this->parent_->send_execute(this->address_, main_param);
       this->current_operation =
           (pos > this->position) ? cover::COVER_OPERATION_OPENING : cover::COVER_OPERATION_CLOSING;

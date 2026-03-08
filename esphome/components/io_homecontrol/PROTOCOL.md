@@ -126,7 +126,7 @@ stateDiagram-v2
 
 ```
  ┌──────────┬──────────┬───────────┬───────────┬─────┬─────────────┬──────────┬─────┐
- │CtrlByte0 │CtrlByte1 │ Source 3B │ Target 3B │ CMD │ Data (0-NB) │ Auth*    │CRC 2│
+ │CtrlByte0 │CtrlByte1 │ Target 3B │ Source 3B │ CMD │ Data (0-NB) │ Auth*    │CRC 2│
  └──────────┴──────────┴───────────┴───────────┴─────┴─────────────┴──────────┴─────┘
   byte 0      byte 1    bytes 2-4   bytes 5-7   b.8   bytes 9+      optional  last 2
 ```
@@ -137,7 +137,7 @@ stateDiagram-v2
 
 | Constant             | Value | Description                                  |
 |----------------------|-------|----------------------------------------------|
-| `FRAME_HEADER_SIZE`  | 9     | CB0 + CB1 + Source(3) + Target(3) + CMD      |
+| `FRAME_HEADER_SIZE`  | 9     | CB0 + CB1 + Target(3) + Source(3) + CMD      |
 | `CTRL0_LEN_OVERHEAD` | 3     | CB0(1) + CRC(2) — excluded from length field |
 | `MIN_FRAME_SIZE`     | 11    | Header(9) + CRC(2)                           |
 | `MAX_FRAME_LEN`      | 31    | Max value in CB0 length field (5 bits)       |
@@ -197,8 +197,8 @@ stateDiagram-v2
 
 Each address is **3 bytes, big-endian** (MSB first).
 
-- **Bytes 2–4:** Source address (sender)
-- **Bytes 5–7:** Target address (recipient)
+- **Bytes 2–4:** Target address (recipient)
+- **Bytes 5–7:** Source address (sender)
 
 ### CRC
 
@@ -225,7 +225,7 @@ Offset  0    1    2    3    4    5    6    7    8    9   10   11   12  ...  n-8 
 ```
 Offset  0    1    2..4  5..7   8     9..24    25     26     27..28  29..30
        ┌────┬────┬──────┬──────┬─────┬────────┬──────┬──────┬───────┬───────┐
-       │CB0 │CB1 │ Src  │ Tgt  │0x30 │EncKey  │ManID │ 0x01 │  Seq  │  CRC  │
+       │CB0 │CB1 │ Tgt  │ Src  │0x30 │EncKey  │ManID │ 0x01 │  Seq  │  CRC  │
        │    │    │(3 B) │(3 B) │     │(16 B)  │0x02  │      │(2 B)  │(2 B)  │
        └────┴────┴──────┴──────┴─────┴────────┴──────┴──────┴───────┴───────┘
          31 bytes total
@@ -532,8 +532,8 @@ sequenceDiagram
 ```
  0     1     2     3     4     5     6     7     8
 ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐
-│0xE0 │0x00 │ SA0 │ SA1 │ SA2 │ TA0 │ TA1 │ TA2 │0x30 │
-│+len │     │   Source (controller)  │  Target (motor)  │CMD  │
+│0xE0 │0x00 │ TA0 │ TA1 │ TA2 │ SA0 │ SA1 │ SA2 │0x30 │
+│+len │     │  Target (motor)   │  Source (controller)  │CMD  │
 └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
  CB0: order=3 (11), 2W=1 (0x20), len field
 
@@ -556,7 +556,7 @@ sequenceDiagram
 ```
  0     1     2     3     4     5     6     7     8     9
 ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐
-│ CB0 │0x00 │ SA0 │ SA1 │ SA2 │ TA0 │ TA1 │ TA2 │0x2E │0x00 │
+│ CB0 │0x00 │ TA0 │ TA1 │ TA2 │ SA0 │ SA1 │ SA2 │0x2E │0x00 │
 └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
   CB0: order=0, 1W=0, len=17
 
@@ -736,8 +736,8 @@ Frame:
                   len = 25 - 3 = 22 → 0x16
                   CB0 = 0x16
   CB1:     00
-  Src:     AA BB CC      (controller)
   Tgt:     11 22 33      (motor)
+  Src:     AA BB CC      (controller)
   CMD:     00            (EXECUTE)
   Orig:    01            (user)
   ACEI:    00
@@ -764,7 +764,7 @@ graph TD
         SEQ["Sequence Numbers (replay protection)"]
     end
     subgraph L2["Data Link Layer"]
-        FRM["Frame: CB0+CB1+Src+Tgt+CMD+Data+Auth+CRC"]
+        FRM["Frame: CB0+CB1+Tgt+Src+CMD+Data+Auth+CRC"]
         CRC["CRC-16/KERMIT"]
     end
     subgraph L1["Physical Layer"]

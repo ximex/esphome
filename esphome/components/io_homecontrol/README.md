@@ -62,14 +62,14 @@ cover:
   - platform: io_homecontrol
     io_homecontrol_id: iohc_hub   # Hub ID (optional if only one hub)
     name: "Living Room Blinds"
-    address: 0x112233              # 3-byte target motor address
+    address: 0x112233              # 3-byte source address (remote channel paired to this motor)
 ```
 
 | Option              | Required | Description                     |
 |---------------------|:--------:|---------------------------------|
 | `io_homecontrol_id` | No*      | Hub component ID                |
 | `name`              | Yes      | Cover entity name               |
-| `address`           | Yes      | 3-byte target motor address     |
+| `address`           | Yes      | 3-byte source address (remote channel paired to motor) |
 
 *\* Required when multiple io_homecontrol hubs exist.*
 

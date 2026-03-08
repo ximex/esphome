@@ -46,17 +46,17 @@ void IOHomecontrol::setup() {
   ESP_LOGI(TAG, "UART%d configured on GPIO%u at 38400 baud for CC1101 async serial RX", UART_PORT, this->gdo0_pin_);
 #endif
 
-  // Restore own sequence number from flash (keyed per source address)
-  auto *entry = this->get_sequence_entry_(this->source_address_);
-  this->sequence_number_ = entry->sequence;
-  if (this->initial_sequence_.has_value() && *this->initial_sequence_ > this->sequence_number_) {
-    this->sequence_number_ = *this->initial_sequence_;
-    entry->sequence = this->sequence_number_;
-    entry->pref.save(&entry->sequence);
-    global_preferences->sync();
+  // Apply initial_sequence override if provided (for hub source_address used in pairing)
+  if (this->source_address_ != 0 && this->initial_sequence_.has_value()) {
+    auto *entry = this->get_sequence_entry_(this->source_address_);
+    if (*this->initial_sequence_ > entry->sequence) {
+      entry->sequence = *this->initial_sequence_;
+      entry->pref.save(&entry->sequence);
+      global_preferences->sync();
+    }
   }
 
-  ESP_LOGI(TAG, "io-homecontrol hub initialized, source=0x%06X, seq=%u", this->source_address_, this->sequence_number_);
+  ESP_LOGI(TAG, "io-homecontrol hub initialized, source=0x%06X", this->source_address_);
   if (this->pairing_mode_) {
     ESP_LOGW(TAG, "========================================");
     ESP_LOGW(TAG, "  PAIRING SNIFFER MODE ACTIVE");
@@ -98,10 +98,8 @@ void IOHomecontrol::dump_config() {
                   "  Pairing Mode: %s\n"
                   "  Source Address: 0x%06X\n"
                   "  TX Repeats: %u\n"
-                  "  Sequence Number: %u\n"
                   "  Key: %s",
-                  TRUEFALSE(this->pairing_mode_), this->source_address_, this->tx_repeats_, this->sequence_number_,
-                  hex_buf);
+                  TRUEFALSE(this->pairing_mode_), this->source_address_, this->tx_repeats_, hex_buf);
   }
 }
 
@@ -360,7 +358,8 @@ bool IOHomecontrol::transmit_serial_(const uint8_t *frame, size_t len) {
 // Build and send a 1W frame
 // ============================================================================
 
-bool IOHomecontrol::send_1w_frame_(uint32_t target, Command cmd, const uint8_t *data, size_t data_len) {
+bool IOHomecontrol::send_1w_frame_(uint32_t source, uint32_t target, Command cmd, const uint8_t *data,
+                                   size_t data_len) {
   if (this->radio_ == nullptr) {
     ESP_LOGE(TAG, "Radio not configured");
     return false;
@@ -388,15 +387,15 @@ bool IOHomecontrol::send_1w_frame_(uint32_t target, Command cmd, const uint8_t *
   // CtrlByte1: no flags
   frame[1] = 0x00;
 
-  // Source address (3 bytes, big-endian) — frame format: [CB0][CB1][Source 3B][Target 3B]
-  frame[2] = (this->source_address_ >> 16) & 0xFF;
-  frame[3] = (this->source_address_ >> 8) & 0xFF;
-  frame[4] = this->source_address_ & 0xFF;
+  // Target address (3 bytes, big-endian) — wire format: [CB0][CB1][Target 3B][Source 3B]
+  frame[2] = (target >> 16) & 0xFF;
+  frame[3] = (target >> 8) & 0xFF;
+  frame[4] = target & 0xFF;
 
-  // Target address (3 bytes, big-endian)
-  frame[5] = (target >> 16) & 0xFF;
-  frame[6] = (target >> 8) & 0xFF;
-  frame[7] = target & 0xFF;
+  // Source address (3 bytes, big-endian)
+  frame[5] = (source >> 16) & 0xFF;
+  frame[6] = (source >> 8) & 0xFF;
+  frame[7] = source & 0xFF;
 
   // Command
   frame[8] = static_cast<uint8_t>(cmd);
@@ -406,8 +405,11 @@ bool IOHomecontrol::send_1w_frame_(uint32_t target, Command cmd, const uint8_t *
     std::memcpy(frame.data() + FRAME_HEADER_SIZE, data, data_len);
   }
 
+  // Get sequence number for this source address
+  auto *seq_entry = this->get_sequence_entry_(source);
+  uint16_t seq = seq_entry->sequence;
+
   // Compute HMAC over command_id + data (NOT the full frame header)
-  uint16_t seq = this->sequence_number_;
   uint8_t mac[MAC_SIZE];
   this->compute_1w_hmac_(frame.data() + FRAME_HEADER_SIZE - 1, 1 + data_len, seq, mac);
 
@@ -429,7 +431,7 @@ bool IOHomecontrol::send_1w_frame_(uint32_t target, Command cmd, const uint8_t *
   char hex_buf[65];  // Max 32 bytes * 2 + 1
   size_t hex_len = std::min(total_size, (size_t) 32);
   format_hex_to(hex_buf, frame.data(), hex_len);
-  ESP_LOGI(TAG, "TX 1W frame: src=0x%06X -> target=0x%06X cmd=0x%02X (%s) seq=%u len=%u", this->source_address_, target,
+  ESP_LOGI(TAG, "TX 1W frame: src=0x%06X -> target=0x%06X cmd=0x%02X (%s) seq=%u len=%u", source, target,
            static_cast<uint8_t>(cmd), get_command_name_(cmd), seq, static_cast<unsigned>(total_size));
   ESP_LOGD(TAG, "  TX raw: %s", hex_buf);
 
@@ -447,11 +449,9 @@ bool IOHomecontrol::send_1w_frame_(uint32_t target, Command cmd, const uint8_t *
     }
   }
 
-  // Increment and persist sequence number
-  this->sequence_number_++;
-  auto *own_entry = this->get_sequence_entry_(this->source_address_);
-  own_entry->sequence = this->sequence_number_;
-  own_entry->pref.save(&own_entry->sequence);
+  // Increment and persist sequence number for this source address
+  seq_entry->sequence = seq + 1;
+  seq_entry->pref.save(&seq_entry->sequence);
   global_preferences->sync();
 
   return success;
@@ -461,7 +461,8 @@ bool IOHomecontrol::send_1w_frame_(uint32_t target, Command cmd, const uint8_t *
 // Public API: Send EXECUTE command
 // ============================================================================
 
-bool IOHomecontrol::send_execute(uint32_t target_address, uint16_t main_param, uint8_t fp1, uint8_t fp2) {
+bool IOHomecontrol::send_execute(uint32_t source_address, uint16_t main_param, uint8_t fp1, uint8_t fp2,
+                                 uint32_t target_address) {
   // EXECUTE command payload:
   // [Originator 1B][ACEI 1B][MainParam 2B][FP1 1B][FP2 1B]
   uint8_t data[6];
@@ -472,7 +473,7 @@ bool IOHomecontrol::send_execute(uint32_t target_address, uint16_t main_param, u
   data[4] = fp1;
   data[5] = fp2;
 
-  return this->send_1w_frame_(target_address, Command::EXECUTE, data, sizeof(data));
+  return this->send_1w_frame_(source_address, target_address, Command::EXECUTE, data, sizeof(data));
 }
 
 // ============================================================================
@@ -509,15 +510,15 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
   frame[0] = (send_key_frame_len & CTRL0_LEN_MASK) | CTRL0_2W_BIT | (3 << 6);    // 2W mode, order=3
   frame[1] = 0x00;
 
-  // Source address — frame format: [CB0][CB1][Source 3B][Target 3B]
-  frame[2] = source_addr_3b[0];
-  frame[3] = source_addr_3b[1];
-  frame[4] = source_addr_3b[2];
+  // Target address — wire format: [CB0][CB1][Target 3B][Source 3B]
+  frame[2] = (target_address >> 16) & 0xFF;
+  frame[3] = (target_address >> 8) & 0xFF;
+  frame[4] = target_address & 0xFF;
 
-  // Target address
-  frame[5] = (target_address >> 16) & 0xFF;
-  frame[6] = (target_address >> 8) & 0xFF;
-  frame[7] = target_address & 0xFF;
+  // Source address
+  frame[5] = source_addr_3b[0];
+  frame[6] = source_addr_3b[1];
+  frame[7] = source_addr_3b[2];
 
   // Command
   frame[8] = static_cast<uint8_t>(Command::SEND_KEY);
@@ -530,7 +531,7 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
   frame[FRAME_HEADER_SIZE + KEY_SIZE + 1] = SEND_KEY_DATA_BYTE;
 
   // Sequence number (MSB first)
-  uint16_t seq = this->sequence_number_;
+  uint16_t seq = this->get_sequence_entry_(this->source_address_)->sequence;
   frame[FRAME_HEADER_SIZE + KEY_SIZE + 2] = (seq >> 8) & 0xFF;
   frame[FRAME_HEADER_SIZE + KEY_SIZE + 3] = seq & 0xFF;
 
@@ -552,9 +553,8 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
   }
 
   // Increment sequence for SEND_KEY
-  this->sequence_number_++;
   auto *own_entry = this->get_sequence_entry_(this->source_address_);
-  own_entry->sequence = this->sequence_number_;
+  own_entry->sequence++;
   own_entry->pref.save(&own_entry->sequence);
   global_preferences->sync();
 
@@ -563,7 +563,8 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
 
   // Step 3: Send PAIR_1W (CMD 0x2E) - standard 1W frame WITH HMAC
   uint8_t pair_data[1] = {0x00};
-  bool result = this->send_1w_frame_(target_address, Command::PAIR_1W, pair_data, sizeof(pair_data));
+  bool result =
+      this->send_1w_frame_(this->source_address_, target_address, Command::PAIR_1W, pair_data, sizeof(pair_data));
 
   if (result) {
     ESP_LOGW(TAG, "PAIRING: Sent SEND_KEY + PAIR_1W successfully");
@@ -648,9 +649,9 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
   bool use_beacon = ctrl1 & CTRL1_BEACON_BIT;
   bool ack_capable = ctrl1 & CTRL1_ACK_BIT;
 
-  // Addresses (3 bytes each, big-endian): [CB0][CB1][Source 3B][Target 3B][CMD]...
-  uint32_t source = ((uint32_t) packet[2] << 16) | ((uint32_t) packet[3] << 8) | packet[4];
-  uint32_t target = ((uint32_t) packet[5] << 16) | ((uint32_t) packet[6] << 8) | packet[7];
+  // Addresses (3 bytes each, big-endian): [CB0][CB1][Target 3B][Source 3B][CMD]...
+  uint32_t target = ((uint32_t) packet[2] << 16) | ((uint32_t) packet[3] << 8) | packet[4];
+  uint32_t source = ((uint32_t) packet[5] << 16) | ((uint32_t) packet[6] << 8) | packet[7];
 
   // Command — cast to enum early for clean comparisons
   auto cmd = static_cast<Command>(packet[8]);
@@ -704,9 +705,9 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
       ESP_LOGW(TAG, "  Encrypted key: %s", enc_hex);
       ESP_LOGW(TAG, "  Manufacturer: 0x%02X  Data: 0x%02X  Seq: %u", manufacturer_id, data_byte, seq);
 
-      // Decrypt the key using source address from frame (offset 2 = after CB0+CB1)
+      // Decrypt the key using source address from frame (offset 5 = after CB0+CB1+Target)
       std::array<uint8_t, KEY_SIZE> decrypted_key{};
-      decrypt_1w_key_(packet.data() + 2, enc_key, decrypted_key.data());
+      decrypt_1w_key_(packet.data() + 5, enc_key, decrypted_key.data());
 
       char key_hex[KEY_SIZE * 2 + 1];
       format_hex_to(key_hex, decrypted_key.data(), KEY_SIZE);
@@ -736,9 +737,7 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
     if (cmd == Command::EXECUTE && data_end - data_start >= 4) {
       uint16_t main_param = (packet[data_start + 2] << 8) | packet[data_start + 3];
       ESP_LOGW(TAG, "  >> EXECUTE %s (param=0x%04X)", get_param_name_(main_param), main_param);
-      if (target != ADDR_BROADCAST) {
-        ESP_LOGW(TAG, "  >> Cover config:  address: 0x%06" PRIX32, target);
-      }
+      ESP_LOGW(TAG, "  >> Cover config:  address: 0x%06" PRIX32, source);
     }
 
     ESP_LOGW(TAG, "  ======================================");
@@ -774,7 +773,7 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
   if (cmd == Command::EXECUTE && data_end - data_start >= 4) {
     uint16_t main_param = (packet[data_start + 2] << 8) | packet[data_start + 3];
     for (auto *c : this->covers_) {
-      if (c->get_address() == target || target == ADDR_BROADCAST) {
+      if (c->get_address() == source) {
         c->update_from_sniffed(main_param);
       }
     }
@@ -802,11 +801,6 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
     } else {
       ESP_LOGW(TAG, "  Seq REJECTED 0x%06X: rx=%u <= stored=%u (replay?)", source, seq, old_seq);
     }
-    // Keep own TX counter in sync when sharing identity with hardware remote
-    if (source == this->source_address_ && seq_advanced) {
-      ESP_LOGI(TAG, "  TX seq synced to %u (shared identity with 0x%06X)", seq_entry->sequence, source);
-      this->sequence_number_ = seq_entry->sequence;
-    }
   } else {
     // No HMAC — can't read actual sequence. If source is already tracked, increment by 1
     // so we know at least one more command was sent (guards against replaying old 1W frames).
@@ -818,9 +812,6 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
         entry.pref.save(&entry.sequence);
         global_preferences->sync();
         ESP_LOGD(TAG, "  Seq BUMP (no-HMAC) 0x%06X: %u -> %u", source, old_seq, entry.sequence);
-        if (source == this->source_address_) {
-          this->sequence_number_ = entry.sequence;
-        }
         break;
       }
     }

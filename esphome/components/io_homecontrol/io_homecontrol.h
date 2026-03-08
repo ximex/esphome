@@ -53,7 +53,8 @@ enum class MainParam : uint16_t {
 };
 
 // --- Frame structure sizes (bytes) ---
-static constexpr size_t FRAME_HEADER_SIZE = 9;  // CtrlByte0 + CtrlByte1 + Target(3) + Source(3) + CMD
+static constexpr size_t FRAME_HEADER_SIZE =
+    9;  // CtrlByte0 + CtrlByte1 + Target(3) + Source(3) + CMD  [wire: Tgt first]
 static constexpr size_t ADDRESS_SIZE = 3;
 static constexpr size_t CRC_SIZE = 2;
 static constexpr size_t SEQ_SIZE = 2;
@@ -164,8 +165,11 @@ class IOHomecontrol : public Component {
   void register_cover(IOHomecontrolCover *cover);
 #endif
 
-  /// Send EXECUTE command (CMD 0x00) with main parameter
-  bool send_execute(uint32_t target_address, uint16_t main_param, uint8_t fp1 = 0x00, uint8_t fp2 = 0x00);
+  /// Send EXECUTE command (CMD 0x00) with main parameter.
+  /// source_address identifies the controller channel paired to the motor.
+  /// target_address is typically ADDR_BROADCAST.
+  bool send_execute(uint32_t source_address, uint16_t main_param, uint8_t fp1 = 0x00, uint8_t fp2 = 0x00,
+                    uint32_t target_address = ADDR_BROADCAST);
 
   /// Pair as a new controller: sends SEND_KEY + PAIR_1W
   /// Motor must be in learning mode (hold PROG on existing remote first)
@@ -186,7 +190,7 @@ class IOHomecontrol : public Component {
   void ensure_1w_channel_();
 
   /// Build and transmit a 1W frame
-  bool send_1w_frame_(uint32_t target, Command cmd, const uint8_t *data, size_t data_len);
+  bool send_1w_frame_(uint32_t source, uint32_t target, Command cmd, const uint8_t *data, size_t data_len);
 
   /// Transmit raw frame bytes using CC1101 async serial TX + ESP32 UART TX.
   /// Prepends preamble (0x55 × N) and sync word (0xFF 0x33) automatically.
@@ -215,7 +219,6 @@ class IOHomecontrol : public Component {
 
   std::array<uint8_t, KEY_SIZE> key_{};
   uint32_t source_address_{0};
-  uint16_t sequence_number_{0};
   optional<uint16_t> initial_sequence_{};
   uint8_t tx_repeats_{4};
   bool pairing_mode_{false};

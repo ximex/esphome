@@ -773,7 +773,7 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
   if (cmd == Command::EXECUTE && data_end - data_start >= 4) {
     uint16_t main_param = (packet[data_start + 2] << 8) | packet[data_start + 3];
     for (auto *c : this->covers_) {
-      if (c->get_address() == source) {
+      if (c->has_address(source)) {
         c->update_from_sniffed(main_param);
       }
     }

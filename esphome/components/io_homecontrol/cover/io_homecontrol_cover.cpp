@@ -32,10 +32,10 @@ void IOHomecontrolCover::loop() {
 
   // No new command received within timeout — assume operation completed
   if (this->current_operation == cover::COVER_OPERATION_OPENING) {
-    ESP_LOGI(TAG, "0x%06X: operation timeout, assuming OPEN", this->address_);
+    ESP_LOGI(TAG, "0x%06X: operation timeout, assuming OPEN", this->get_primary_address());
     this->position = cover::COVER_OPEN;
   } else if (this->current_operation == cover::COVER_OPERATION_CLOSING) {
-    ESP_LOGI(TAG, "0x%06X: operation timeout, assuming CLOSED", this->address_);
+    ESP_LOGI(TAG, "0x%06X: operation timeout, assuming CLOSED", this->get_primary_address());
     this->position = cover::COVER_CLOSED;
   }
   this->current_operation = cover::COVER_OPERATION_IDLE;
@@ -43,9 +43,19 @@ void IOHomecontrolCover::loop() {
   this->publish_state();
 }
 
+bool IOHomecontrolCover::has_address(uint32_t address) const {
+  for (uint32_t addr : this->addresses_) {
+    if (addr == address)
+      return true;
+  }
+  return false;
+}
+
 void IOHomecontrolCover::dump_config() {
   LOG_COVER("", "io-homecontrol Cover", this);
-  ESP_LOGCONFIG(TAG, "  Source Address: 0x%06X", this->address_);
+  for (uint32_t addr : this->addresses_) {
+    ESP_LOGCONFIG(TAG, "  Source Address: 0x%06X%s", addr, addr == this->get_primary_address() ? " (primary)" : "");
+  }
 }
 
 cover::CoverTraits IOHomecontrolCover::get_traits() {
@@ -60,8 +70,8 @@ cover::CoverTraits IOHomecontrolCover::get_traits() {
 
 void IOHomecontrolCover::control(const cover::CoverCall &call) {
   if (call.get_stop()) {
-    ESP_LOGI(TAG, "Sending STOP from 0x%06X", this->address_);
-    this->parent_->send_execute(this->address_, static_cast<uint16_t>(MainParam::STOP));
+    ESP_LOGI(TAG, "Sending STOP from 0x%06X", this->get_primary_address());
+    this->parent_->send_execute(this->get_primary_address(), static_cast<uint16_t>(MainParam::STOP));
     this->current_operation = cover::COVER_OPERATION_IDLE;
     this->publish_state();
     return;
@@ -72,14 +82,14 @@ void IOHomecontrolCover::control(const cover::CoverCall &call) {
 
     if (pos >= cover::COVER_OPEN) {
       // Fully open
-      ESP_LOGI(TAG, "Sending OPEN from 0x%06X", this->address_);
-      this->parent_->send_execute(this->address_, static_cast<uint16_t>(MainParam::OPEN));
+      ESP_LOGI(TAG, "Sending OPEN from 0x%06X", this->get_primary_address());
+      this->parent_->send_execute(this->get_primary_address(), static_cast<uint16_t>(MainParam::OPEN));
       this->current_operation = cover::COVER_OPERATION_OPENING;
       this->position = cover::COVER_OPEN;
     } else if (pos <= cover::COVER_CLOSED) {
       // Fully closed
-      ESP_LOGI(TAG, "Sending CLOSE from 0x%06X", this->address_);
-      this->parent_->send_execute(this->address_, static_cast<uint16_t>(MainParam::CLOSE));
+      ESP_LOGI(TAG, "Sending CLOSE from 0x%06X", this->get_primary_address());
+      this->parent_->send_execute(this->get_primary_address(), static_cast<uint16_t>(MainParam::CLOSE));
       this->current_operation = cover::COVER_OPERATION_CLOSING;
       this->position = cover::COVER_CLOSED;
     } else {
@@ -88,8 +98,9 @@ void IOHomecontrolCover::control(const cover::CoverCall &call) {
       // ESPHome cover:  1.0 = fully open,    0.0 = fully closed
       // So we invert: param = (1.0 - pos) * 0xC800
       uint16_t main_param = static_cast<uint16_t>((1.0f - pos) * static_cast<uint16_t>(MainParam::CLOSE));
-      ESP_LOGI(TAG, "Sending POSITION %.0f%% (param=0x%04X) from 0x%06X", pos * 100.0f, main_param, this->address_);
-      this->parent_->send_execute(this->address_, main_param);
+      ESP_LOGI(TAG, "Sending POSITION %.0f%% (param=0x%04X) from 0x%06X", pos * 100.0f, main_param,
+               this->get_primary_address());
+      this->parent_->send_execute(this->get_primary_address(), main_param);
       this->current_operation =
           (pos > this->position) ? cover::COVER_OPERATION_OPENING : cover::COVER_OPERATION_CLOSING;
       this->position = pos;
@@ -126,7 +137,7 @@ void IOHomecontrolCover::update_from_sniffed(uint16_t main_param) {
     return;  // Unknown param, don't update
   }
 
-  ESP_LOGI(TAG, "Sniffed command for 0x%06X: param=0x%04X -> position=%.0f%%", this->address_, main_param,
+  ESP_LOGI(TAG, "Sniffed command for 0x%06X: param=0x%04X -> position=%.0f%%", this->get_primary_address(), main_param,
            this->position * 100.0f);
   this->publish_state();
 }

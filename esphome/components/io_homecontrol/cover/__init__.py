@@ -21,7 +21,7 @@ CONFIG_SCHEMA = (
     .extend(
         {
             cv.GenerateID(CONF_IO_HOMECONTROL_ID): cv.use_id(IOHomecontrol),
-            cv.Required(CONF_ADDRESS): validate_address,
+            cv.Required(CONF_ADDRESS): cv.ensure_list(validate_address),
         },
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -35,4 +35,5 @@ async def to_code(config):
     cg.add_define("USE_IO_HOMECONTROL_COVER")
     hub = await cg.get_variable(config[CONF_IO_HOMECONTROL_ID])
     cg.add(var.set_parent(hub))
-    cg.add(var.set_address(config[CONF_ADDRESS]))
+    for addr in config[CONF_ADDRESS]:
+        cg.add(var.add_address(addr))

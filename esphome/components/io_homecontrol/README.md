@@ -62,14 +62,19 @@ cover:
   - platform: io_homecontrol
     io_homecontrol_id: iohc_hub   # Hub ID (optional if only one hub)
     name: "Living Room Blinds"
-    address: 0x112233              # 3-byte source address (remote channel paired to this motor)
+    address: 0x112233              # Source address (remote channel paired to this motor)
+  - platform: io_homecontrol
+    name: "Kitchen Blinds"
+    address:                       # Multiple source addresses (first is used for TX)
+      - 0xAABBCC
+      - 0xDDEEFF
 ```
 
 | Option              | Required | Description                     |
 |---------------------|:--------:|---------------------------------|
 | `io_homecontrol_id` | No*      | Hub component ID                |
 | `name`              | Yes      | Cover entity name               |
-| `address`           | Yes      | 3-byte source address (remote channel paired to motor) |
+| `address`           | Yes      | Source address(es) — remote channel(s) paired to this motor. First is used for TX, all matched for RX sniffing. |
 
 *\* Required when multiple io_homecontrol hubs exist.*
 

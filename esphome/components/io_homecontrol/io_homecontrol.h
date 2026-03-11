@@ -226,6 +226,14 @@ class IOHomecontrol : public Component {
   uint32_t last_channel_switch_{0};
   uint32_t current_freq_{FREQ_CH2};
 
+  // TX repeat state machine (non-blocking repeats in loop())
+  bool tx_pending_{false};
+  uint8_t tx_remaining_repeats_{0};
+  uint32_t tx_last_send_time_{0};
+  size_t tx_frame_len_{0};
+  std::array<uint8_t, MAX_PACKET_SIZE> tx_frame_{};
+  uint32_t tx_seq_address_{0};  // Source address for sequence increment after all repeats
+
   // UART RX state (async serial from CC1101 GDO0)
   uint8_t gdo0_pin_{0};
   RxState rx_state_{RxState::WAITING_SYNC_FF};

@@ -73,6 +73,28 @@ void IOHomecontrol::loop() {
   // Process incoming bytes from ESP32 UART (CC1101 async serial RX)
   this->process_uart_rx_();
 
+  // Handle non-blocking TX repeats
+  if (this->tx_pending_) {
+    uint32_t now = millis();
+    if (now - this->tx_last_send_time_ >= TX_REPEAT_DELAY_MS) {
+      if (!this->transmit_serial_(this->tx_frame_.data(), this->tx_frame_len_)) {
+        ESP_LOGE(TAG, "Transmit failed on repeat %u", this->tx_repeats_ - this->tx_remaining_repeats_);
+        this->tx_pending_ = false;
+      } else {
+        this->tx_last_send_time_ = now;
+        this->tx_remaining_repeats_--;
+        if (this->tx_remaining_repeats_ == 0) {
+          this->tx_pending_ = false;
+          // Increment and persist sequence number after all repeats complete
+          auto *seq_entry = this->get_sequence_entry_(this->tx_seq_address_);
+          seq_entry->sequence++;
+          seq_entry->pref.save(&seq_entry->sequence);
+          global_preferences->sync();
+        }
+      }
+    }
+  }
+
   // In pairing mode, scan all 3 channels to detect 2W traffic
   if (this->pairing_mode_) {
     static constexpr uint32_t CHANNELS[NUM_CHANNELS] = {FREQ_CH1, FREQ_CH2, FREQ_CH3};
@@ -427,27 +449,28 @@ bool IOHomecontrol::send_1w_frame_(uint32_t source, uint32_t target, Command cmd
            static_cast<uint8_t>(cmd), get_command_name_(cmd), seq, static_cast<unsigned>(total_size));
   ESP_LOGD(TAG, "  TX raw: %s", hex_buf);
 
-  // Transmit with repeats using async serial TX (CC1101 + ESP32 UART)
-  // This ensures proper UART framing (start/stop bits, LSB-first) required by io-homecontrol.
-  // Note: blocking delays between repeats (~40ms each). Acceptable for infrequent TX operations.
-  bool success = true;
-  for (uint8_t i = 0; i < this->tx_repeats_; i++) {
-    if (!this->transmit_serial_(frame.data(), total_size)) {
-      ESP_LOGE(TAG, "Transmit failed on repeat %u", i);
-      success = false;
-      break;
-    }
-    if (i < this->tx_repeats_ - 1) {
-      delay(TX_REPEAT_DELAY_MS);
-    }
+  // Transmit first repeat immediately, queue remaining for non-blocking delivery in loop()
+  if (!this->transmit_serial_(frame.data(), total_size)) {
+    ESP_LOGE(TAG, "Transmit failed on first attempt");
+    return false;
   }
 
-  // Increment and persist sequence number for this source address
-  seq_entry->sequence = seq + 1;
-  seq_entry->pref.save(&seq_entry->sequence);
-  global_preferences->sync();
+  uint8_t remaining = this->tx_repeats_ - 1;
+  if (remaining > 0) {
+    std::memcpy(this->tx_frame_.data(), frame.data(), total_size);
+    this->tx_frame_len_ = total_size;
+    this->tx_remaining_repeats_ = remaining;
+    this->tx_last_send_time_ = millis();
+    this->tx_seq_address_ = source;
+    this->tx_pending_ = true;
+  } else {
+    // Single transmit — increment sequence immediately
+    seq_entry->sequence = seq + 1;
+    seq_entry->pref.save(&seq_entry->sequence);
+    global_preferences->sync();
+  }
 
-  return success;
+  return true;
 }
 
 // ============================================================================
@@ -533,7 +556,9 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
   frame[SEND_KEY_MIN_SIZE - 2] = crc & 0xFF;
   frame[SEND_KEY_MIN_SIZE - 1] = (crc >> 8) & 0xFF;
 
-  // Transmit SEND_KEY with repeats using async serial TX
+  // Transmit SEND_KEY with repeats using async serial TX.
+  // Blocking delays here are acceptable — pairing is a rare manual operation
+  // and PAIR_1W must follow immediately after SEND_KEY completes.
   ESP_LOGW(TAG, "PAIRING: Sending SEND_KEY to 0x%06X (seq=%u)", target_address, seq);
   for (uint8_t i = 0; i < this->tx_repeats_; i++) {
     if (!this->transmit_serial_(frame.data(), frame.size())) {

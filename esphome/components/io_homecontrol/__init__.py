@@ -7,6 +7,7 @@ from esphome.const import CONF_ID, CONF_KEY
 _LOGGER = logging.getLogger(__name__)
 
 CODEOWNERS = ["@ximex"]
+DEPENDENCIES = ["cc1101"]
 MULTI_CONF = False
 
 CONF_IO_HOMECONTROL_ID = "io_homecontrol_id"
@@ -62,6 +63,7 @@ def validate_config(config):
 
 CONFIG_SCHEMA = cv.All(
     cv.only_on_esp32,
+    cv.only_with_esp_idf,
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(IOHomecontrol),

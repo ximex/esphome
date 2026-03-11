@@ -14,6 +14,9 @@
 namespace esphome::io_homecontrol {
 
 static const char *const TAG = "io_homecontrol";
+#ifdef USE_ESP_IDF
+static constexpr uart_port_t UART_PORT = UART_NUM_1;
+#endif
 
 void IOHomecontrol::set_key(std::initializer_list<uint8_t> key) {
   size_t copy_len = std::min(key.size(), KEY_SIZE);
@@ -39,7 +42,6 @@ void IOHomecontrol::setup() {
   uart_config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
   uart_config.source_clk = UART_SCLK_DEFAULT;
 
-  static constexpr uart_port_t UART_PORT = UART_NUM_1;
   uart_param_config(UART_PORT, &uart_config);
   uart_set_pin(UART_PORT, UART_PIN_NO_CHANGE, this->gdo0_pin_, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
   uart_driver_install(UART_PORT, UART_RX_BUF_SIZE, 0, 0, nullptr, 0);
@@ -130,7 +132,6 @@ SequenceEntry *IOHomecontrol::get_sequence_entry_(uint32_t address) {
 
 void IOHomecontrol::process_uart_rx_() {
 #ifdef USE_ESP_IDF
-  static constexpr uart_port_t UART_PORT = UART_NUM_1;
   uint8_t buf[64];
   int len = uart_read_bytes(UART_PORT, buf, sizeof(buf), 0);
   if (len <= 0)
@@ -159,7 +160,7 @@ void IOHomecontrol::process_uart_rx_() {
         if (byte == 0x33) {
           // Sync word detected — next byte is CtrlByte0
           this->rx_state_ = RxState::READING_HEADER;
-          this->rx_buffer_.clear();
+          this->rx_buffer_len_ = 0;
           this->rx_frame_start_ = now;
         } else if (byte == 0xFF) {
           // Multiple 0xFF in a row — stay in this state
@@ -170,9 +171,9 @@ void IOHomecontrol::process_uart_rx_() {
 
       case RxState::READING_HEADER: {
         // First byte after sync is CtrlByte0
-        this->rx_buffer_.push_back(byte);
+        this->rx_buffer_[this->rx_buffer_len_++] = byte;
         size_t frame_len_field = byte & CTRL0_LEN_MASK;
-        this->rx_expected_len_ = frame_len_field + CTRL0_LEN_OVERHEAD;
+        this->rx_expected_len_ = frame_len_field + CTRL0_L_EXCLUDED_BYTES;
 
         if (this->rx_expected_len_ < MIN_FRAME_SIZE || this->rx_expected_len_ > MAX_PACKET_SIZE) {
           ESP_LOGD(TAG, "Invalid CtrlByte0 length: 0x%02X (expected %u bytes)", byte,
@@ -185,10 +186,10 @@ void IOHomecontrol::process_uart_rx_() {
       }
 
       case RxState::READING_FRAME:
-        this->rx_buffer_.push_back(byte);
-        if (this->rx_buffer_.size() >= this->rx_expected_len_) {
+        this->rx_buffer_[this->rx_buffer_len_++] = byte;
+        if (this->rx_buffer_len_ >= this->rx_expected_len_) {
           // Complete packet — deliver to parser
-          this->parse_frame_(this->rx_buffer_, 0.0f);
+          this->parse_frame_(this->rx_buffer_.data(), this->rx_buffer_len_);
           this->rx_state_ = RxState::WAITING_SYNC_FF;
         }
         break;
@@ -205,17 +206,6 @@ uint16_t IOHomecontrol::compute_crc_(const uint8_t *data, size_t len) {
   return crc16(data, static_cast<uint16_t>(len), KERMIT_INIT, KERMIT_POLY);
 }
 
-bool IOHomecontrol::verify_crc_(const std::vector<uint8_t> &packet) {
-  if (packet.size() < CRC_SIZE + 1) {
-    return false;
-  }
-  size_t crc_offset = packet.size() - CRC_SIZE;
-  uint16_t computed = compute_crc_(packet.data(), crc_offset);
-  // CRC is transmitted LSB first
-  uint16_t received = packet[crc_offset] | (packet[crc_offset + 1] << 8);
-  return computed == received;
-}
-
 // ============================================================================
 // 1W HMAC computation using AES-128-ECB
 // Input: command_id byte + parameter data (NOT the full frame header)
@@ -223,6 +213,7 @@ bool IOHomecontrol::verify_crc_(const std::vector<uint8_t> &packet) {
 
 /// Custom checksum used in the io-homecontrol HMAC IV (bytes 8-9).
 /// Processes each byte of {command_id, params...} through a shift-XOR algorithm.
+/// See PROTOCOL.md "1W HMAC Authentication" for algorithm details.
 static void compute_hmac_checksum_(const uint8_t *data, size_t len, uint8_t &chksum1, uint8_t &chksum2) {
   chksum1 = 0;
   chksum2 = 0;
@@ -252,10 +243,10 @@ void IOHomecontrol::compute_1w_hmac_(const uint8_t *frame_data, size_t len, uint
   std::array<uint8_t, KEY_SIZE> iv{};
 
   // Bytes 0-7: first 8 bytes of command+data, padded with 0x55
-  size_t copy_len = std::min(len, HMAC_FRAME_BYTES);
+  size_t copy_len = std::min(len, HMAC_IV_DATA_BYTES);
   std::memcpy(iv.data(), frame_data, copy_len);
-  if (copy_len < HMAC_FRAME_BYTES) {
-    std::memset(iv.data() + copy_len, HMAC_PADDING, HMAC_FRAME_BYTES - copy_len);
+  if (copy_len < HMAC_IV_DATA_BYTES) {
+    std::memset(iv.data() + copy_len, HMAC_PADDING, HMAC_IV_DATA_BYTES - copy_len);
   }
 
   // Bytes 8-9: custom checksum over ALL command+data bytes
@@ -307,8 +298,6 @@ void IOHomecontrol::ensure_1w_channel_() {
 
 bool IOHomecontrol::transmit_serial_(const uint8_t *frame, size_t len) {
 #ifdef USE_ESP_IDF
-  static constexpr uart_port_t UART_PORT = UART_NUM_1;
-
   // Build TX buffer: preamble (0x55 × N) + sync (0xFF 0x33) + frame bytes
   // UART hardware adds start/stop bits around each byte automatically
   const size_t tx_len = TX_PREAMBLE_BYTES + 2 + len;
@@ -374,7 +363,7 @@ bool IOHomecontrol::send_1w_frame_(uint32_t source, uint32_t target, Command cmd
   // Total size = FRAME_HEADER_SIZE + data_len + HMAC_AUTH_SIZE + CRC_SIZE
   // CtrlByte0 length field (bits 4-0) = total_size - MIN_FRAME_SIZE (bytes beyond minimum frame)
   size_t total_size = FRAME_HEADER_SIZE + data_len + HMAC_AUTH_SIZE + CRC_SIZE;
-  size_t frame_len = total_size - CTRL0_LEN_OVERHEAD;  // L = total - 3 (excludes CtrlByte0 and CRC)
+  size_t frame_len = total_size - CTRL0_L_EXCLUDED_BYTES;  // L = total - 3 (excludes CtrlByte0 and CRC)
   if (frame_len > MAX_FRAME_LEN) {
     ESP_LOGE(TAG, "Frame too long: %u bytes", static_cast<unsigned>(total_size));
     return false;
@@ -410,8 +399,11 @@ bool IOHomecontrol::send_1w_frame_(uint32_t source, uint32_t target, Command cmd
   uint16_t seq = seq_entry->sequence;
 
   // Compute HMAC over command_id + data (NOT the full frame header)
+  // HMAC input starts at CMD byte (last byte of header) + data payload
+  size_t hmac_offset = FRAME_HEADER_SIZE - 1;  // CMD byte position
+  size_t hmac_len = 1 + data_len;              // CMD + data
   uint8_t mac[MAC_SIZE];
-  this->compute_1w_hmac_(frame.data() + FRAME_HEADER_SIZE - 1, 1 + data_len, seq, mac);
+  this->compute_1w_hmac_(frame.data() + hmac_offset, hmac_len, seq, mac);
 
   // Append sequence number (MSB first)
   size_t auth_offset = FRAME_HEADER_SIZE + data_len;
@@ -428,15 +420,16 @@ bool IOHomecontrol::send_1w_frame_(uint32_t source, uint32_t target, Command cmd
   frame[crc_offset + 1] = (crc >> 8) & 0xFF;
 
   // Log the frame
-  char hex_buf[65];  // Max 32 bytes * 2 + 1
-  size_t hex_len = std::min(total_size, (size_t) 32);
+  char hex_buf[MAX_PACKET_SIZE * 2 + 1];
+  size_t hex_len = std::min(total_size, MAX_PACKET_SIZE);
   format_hex_to(hex_buf, frame.data(), hex_len);
   ESP_LOGI(TAG, "TX 1W frame: src=0x%06X -> target=0x%06X cmd=0x%02X (%s) seq=%u len=%u", source, target,
            static_cast<uint8_t>(cmd), get_command_name_(cmd), seq, static_cast<unsigned>(total_size));
   ESP_LOGD(TAG, "  TX raw: %s", hex_buf);
 
   // Transmit with repeats using async serial TX (CC1101 + ESP32 UART)
-  // This ensures proper UART framing (start/stop bits, LSB-first) required by io-homecontrol
+  // This ensures proper UART framing (start/stop bits, LSB-first) required by io-homecontrol.
+  // Note: blocking delays between repeats (~40ms each). Acceptable for infrequent TX operations.
   bool success = true;
   for (uint8_t i = 0; i < this->tx_repeats_; i++) {
     if (!this->transmit_serial_(frame.data(), total_size)) {
@@ -461,17 +454,17 @@ bool IOHomecontrol::send_1w_frame_(uint32_t source, uint32_t target, Command cmd
 // Public API: Send EXECUTE command
 // ============================================================================
 
-bool IOHomecontrol::send_execute(uint32_t source_address, uint16_t main_param, uint8_t fp1, uint8_t fp2,
-                                 uint32_t target_address) {
+bool IOHomecontrol::send_execute(uint32_t source_address, uint16_t main_param, uint8_t func_param_1,
+                                 uint8_t func_param_2, uint32_t target_address) {
   // EXECUTE command payload:
-  // [Originator 1B][ACEI 1B][MainParam 2B][FP1 1B][FP2 1B]
+  // [Originator 1B][ACEI 1B][MainParam 2B][FuncParam1 1B][FuncParam2 1B]
   uint8_t data[6];
   data[0] = ORIGINATOR_USER;
   data[1] = ACEI_DEFAULT;
   data[2] = (main_param >> 8) & 0xFF;
   data[3] = main_param & 0xFF;
-  data[4] = fp1;
-  data[5] = fp2;
+  data[4] = func_param_1;
+  data[5] = func_param_2;
 
   return this->send_1w_frame_(source_address, target_address, Command::EXECUTE, data, sizeof(data));
 }
@@ -494,9 +487,9 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
   // decrypt_1w_key_ is XOR-based (self-inverse), so it works for encryption too:
   //   encrypted = AES_ECB(TransferKey, IV_from_addr) XOR plaintext_key
   uint8_t source_addr_3b[ADDRESS_SIZE] = {
-      (uint8_t) ((this->source_address_ >> 16) & 0xFF),
-      (uint8_t) ((this->source_address_ >> 8) & 0xFF),
-      (uint8_t) (this->source_address_ & 0xFF),
+      static_cast<uint8_t>((this->source_address_ >> 16) & 0xFF),
+      static_cast<uint8_t>((this->source_address_ >> 8) & 0xFF),
+      static_cast<uint8_t>(this->source_address_ & 0xFF),
   };
   std::array<uint8_t, KEY_SIZE> encrypted_key{};
   decrypt_1w_key_(source_addr_3b, this->key_.data(), encrypted_key.data());
@@ -506,8 +499,8 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
   std::array<uint8_t, SEND_KEY_MIN_SIZE> frame{};
 
   // L = total - 3 (excludes CtrlByte0 and CRC)
-  constexpr size_t send_key_frame_len = SEND_KEY_MIN_SIZE - CTRL0_LEN_OVERHEAD;  // 31 - 3 = 28
-  frame[0] = (send_key_frame_len & CTRL0_LEN_MASK) | CTRL0_2W_BIT | (3 << 6);    // 2W mode, order=3
+  constexpr size_t send_key_frame_len = SEND_KEY_MIN_SIZE - CTRL0_L_EXCLUDED_BYTES;  // 31 - 3 = 28
+  frame[0] = (send_key_frame_len & CTRL0_LEN_MASK) | CTRL0_2W_BIT | (3 << 6);        // 2W mode, order=3
   frame[1] = 0x00;
 
   // Target address — wire format: [CB0][CB1][Target 3B][Source 3B]
@@ -614,36 +607,36 @@ void IOHomecontrol::decrypt_1w_key_(const uint8_t *source_addr_3b, const uint8_t
 // Packet reception and parsing
 // ============================================================================
 
-void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi) {
-  if (packet.size() < MIN_FRAME_SIZE) {
-    ESP_LOGW(TAG, "Packet too short: %u bytes", static_cast<unsigned>(packet.size()));
+void IOHomecontrol::parse_frame_(const uint8_t *packet, size_t packet_size) {
+  if (packet_size < MIN_FRAME_SIZE) {
+    ESP_LOGW(TAG, "Packet too short: %u bytes", static_cast<unsigned>(packet_size));
     return;
   }
 
   // Extract actual frame size from CtrlByte0 length field.
   // Per spec: L (bits 4:0) = total_bytes - 3 (excludes CtrlByte0 and 2-byte CRC)
   uint8_t ctrl0 = packet[0];
-  size_t actual_size = (ctrl0 & CTRL0_LEN_MASK) + CTRL0_LEN_OVERHEAD;
+  size_t actual_size = (ctrl0 & CTRL0_LEN_MASK) + CTRL0_L_EXCLUDED_BYTES;
 
-  if (actual_size < MIN_FRAME_SIZE || actual_size > packet.size()) {
+  if (actual_size < MIN_FRAME_SIZE || actual_size > packet_size) {
     ESP_LOGW(TAG, "Invalid frame length (ctrl0=0x%02X, actual=%u, packet=%u)", ctrl0,
-             static_cast<unsigned>(actual_size), static_cast<unsigned>(packet.size()));
+             static_cast<unsigned>(actual_size), static_cast<unsigned>(packet_size));
     return;
   }
 
   // Verify CRC using actual frame size (not the radio-delivered packet size)
   size_t crc_offset = actual_size - CRC_SIZE;
-  uint16_t computed_crc = compute_crc_(packet.data(), crc_offset);
+  uint16_t computed_crc = compute_crc_(packet, crc_offset);
   uint16_t received_crc = packet[crc_offset] | (packet[crc_offset + 1] << 8);
   if (computed_crc != received_crc) {
-    ESP_LOGW(TAG, "CRC mismatch (RSSI: %.1f dBm)", rssi);
+    ESP_LOGW(TAG, "CRC mismatch (computed=0x%04X received=0x%04X)", computed_crc, received_crc);
     return;
   }
 
   // Parse control bytes
   uint8_t ctrl1 = packet[1];
 
-  uint8_t order = (ctrl0 >> 6) & 0x03;
+  uint8_t order = (ctrl0 >> 6) & 0x03;  // Used in logging only; multi-frame reassembly (2W) not yet implemented
   bool is_1w = !(ctrl0 & CTRL0_2W_BIT);
 
   bool use_beacon = ctrl1 & CTRL1_BEACON_BIT;
@@ -679,7 +672,7 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
            (float) this->current_freq_ / 1e6f, order, static_cast<unsigned>(actual_size), use_beacon ? "yes" : "no",
            ack_capable ? "yes" : "no", is_own_frame ? " [OWN-LOOPBACK]" : "");
   ESP_LOGI(TAG, "  Target: 0x%06X | Source: 0x%06X", target, source);
-  ESP_LOGI(TAG, "  CMD: 0x%02X (%s) | RSSI: %.1f dBm", static_cast<uint8_t>(cmd), get_command_name_(cmd), rssi);
+  ESP_LOGI(TAG, "  CMD: 0x%02X (%s)", static_cast<uint8_t>(cmd), get_command_name_(cmd));
 
   // ---- Pairing mode: prominent address and key logging ----
   if (this->pairing_mode_) {
@@ -693,8 +686,8 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
 
     // SEND_KEY - decrypt and log the private key
     // Frame: [CB0][CB1][Tgt 3][Src 3][0x30][EncKey 16][ManID 1][Data 1][Seq 2][CRC 2]
-    if (cmd == Command::SEND_KEY && packet.size() >= SEND_KEY_MIN_SIZE) {
-      const uint8_t *enc_key = packet.data() + FRAME_HEADER_SIZE;
+    if (cmd == Command::SEND_KEY && packet_size >= SEND_KEY_MIN_SIZE) {
+      const uint8_t *enc_key = packet + FRAME_HEADER_SIZE;
       uint8_t manufacturer_id = packet[FRAME_HEADER_SIZE + KEY_SIZE];
       uint8_t data_byte = packet[FRAME_HEADER_SIZE + KEY_SIZE + 1];
       uint16_t seq = (packet[FRAME_HEADER_SIZE + KEY_SIZE + 2] << 8) | packet[FRAME_HEADER_SIZE + KEY_SIZE + 3];
@@ -707,7 +700,7 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
 
       // Decrypt the key using source address from frame (offset 5 = after CB0+CB1+Target)
       std::array<uint8_t, KEY_SIZE> decrypted_key{};
-      decrypt_1w_key_(packet.data() + 5, enc_key, decrypted_key.data());
+      decrypt_1w_key_(packet + 5, enc_key, decrypted_key.data());
 
       char key_hex[KEY_SIZE * 2 + 1];
       format_hex_to(key_hex, decrypted_key.data(), KEY_SIZE);
@@ -746,9 +739,9 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
   // ---- Normal mode: detailed payload logging ----
   if (!this->pairing_mode_ && data_end > data_start) {
     size_t data_len = data_end - data_start;
-    char hex_buf[43];  // Max 21 bytes * 2 + 1
-    size_t hex_len = std::min(data_len, (size_t) 21);
-    format_hex_to(hex_buf, packet.data() + data_start, hex_len);
+    char hex_buf[MAX_PACKET_SIZE * 2 + 1];
+    size_t hex_len = std::min(data_len, MAX_PACKET_SIZE);
+    format_hex_to(hex_buf, packet + data_start, hex_len);
     ESP_LOGI(TAG, "  Data: %s", hex_buf);
 
     // Parse EXECUTE command details
@@ -774,17 +767,19 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
     uint16_t main_param = (packet[data_start + 2] << 8) | packet[data_start + 3];
     for (auto *c : this->covers_) {
       if (c->has_address(source)) {
-        c->update_from_sniffed(main_param);
+        c->update_from_sniffed(source, main_param);
       }
     }
   }
 #endif
 
-  // Log 1W authentication data and auto-track sequence number
-  if (has_hmac && crc_offset > data_end + HMAC_AUTH_SIZE - 1) {
+  // Log 1W authentication data and auto-track sequence number.
+  // Note: HMAC is not verified on RX — passive sniffing only needs sequence tracking
+  // to prevent replay attacks. Verification would require knowing every sender's key.
+  if (has_hmac) {
     uint16_t seq = (packet[data_end] << 8) | packet[data_end + 1];
     char mac_hex[MAC_SIZE * 2 + 1];
-    format_hex_to(mac_hex, packet.data() + data_end + SEQ_SIZE, MAC_SIZE);
+    format_hex_to(mac_hex, packet + data_end + SEQ_SIZE, MAC_SIZE);
     ESP_LOGI(TAG, "  1W Auth: seq=%u MAC=%s", seq, mac_hex);
 
     // Persist sequence number for all sniffed source addresses.
@@ -818,9 +813,9 @@ void IOHomecontrol::parse_frame_(const std::vector<uint8_t> &packet, float rssi)
   }
 
   // Log raw hex at debug level (only the actual frame, not radio noise)
-  char raw_hex[65];
-  size_t raw_len = std::min(actual_size, (size_t) 32);
-  format_hex_to(raw_hex, packet.data(), raw_len);
+  char raw_hex[MAX_PACKET_SIZE * 2 + 1];
+  size_t raw_len = std::min(actual_size, MAX_PACKET_SIZE);
+  format_hex_to(raw_hex, packet, raw_len);
   ESP_LOGD(TAG, "  Raw: %s", raw_hex);
 }
 

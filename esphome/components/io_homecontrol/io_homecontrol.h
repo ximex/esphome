@@ -60,12 +60,12 @@ static constexpr size_t CRC_SIZE = 2;
 static constexpr size_t SEQ_SIZE = 2;
 static constexpr size_t MAC_SIZE = 6;
 static constexpr size_t HMAC_AUTH_SIZE = SEQ_SIZE + MAC_SIZE;  // Seq(2) + MAC(6) appended to 1W frames
-// CtrlByte0 length field: L = total_packet_size - CTRL0_LEN_OVERHEAD
+// CtrlByte0 length field: L = total_packet_size - CTRL0_L_EXCLUDED_BYTES
 // Per spec: L excludes CtrlByte0 (1 byte) and CRC (2 bytes)
-static constexpr size_t CTRL0_LEN_OVERHEAD = 1 + CRC_SIZE;              // = 3
+static constexpr size_t CTRL0_L_EXCLUDED_BYTES = 1 + CRC_SIZE;          // = 3 (CtrlByte0 + CRC not counted in L field)
 static constexpr size_t MIN_FRAME_SIZE = FRAME_HEADER_SIZE + CRC_SIZE;  // Minimum valid packet = 11
 static constexpr size_t MAX_FRAME_LEN = 31;                             // Max value in CtrlByte0 length field (5 bits)
-static constexpr size_t MAX_PACKET_SIZE = MAX_FRAME_LEN + CTRL0_LEN_OVERHEAD;  // L_max + 3 = 34
+static constexpr size_t MAX_PACKET_SIZE = MAX_FRAME_LEN + CTRL0_L_EXCLUDED_BYTES;  // L_max + 3 = 34
 
 // SEND_KEY frame: [Header 9][EncKey 16][ManID 1][Data 1][Seq 2][CRC 2]
 static constexpr size_t SEND_KEY_MIN_SIZE = 31;
@@ -87,11 +87,11 @@ static constexpr uint8_t CTRL1_ACK_BIT = 0x10;     // Bit 4: ACK capable (2W dev
 
 // --- HMAC IV construction ---
 static constexpr uint8_t HMAC_PADDING = 0x55;
-static constexpr size_t HMAC_FRAME_BYTES = 8;  // First 8 bytes of frame used in IV
+static constexpr size_t HMAC_IV_DATA_BYTES = 8;  // Max cmd+data bytes copied into HMAC IV (bytes 0-7)
 
 // --- EXECUTE command payload fields ---
 static constexpr uint8_t ORIGINATOR_USER = 0x01;
-static constexpr uint8_t ACEI_DEFAULT = 0x00;
+static constexpr uint8_t ACEI_DEFAULT = 0x00;  // Access Control Extension & priority Info
 
 // --- TX timing ---
 static constexpr uint32_t TX_REPEAT_DELAY_MS = 40;
@@ -113,7 +113,7 @@ static constexpr uint32_t SCAN_DWELL_MS = 50;  // ms per channel during scanning
 
 // --- SEND_KEY payload fields ---
 static constexpr uint8_t MANUFACTURER_SOMFY = 0x02;
-static constexpr uint8_t SEND_KEY_DATA_BYTE = 0x01;
+static constexpr uint8_t SEND_KEY_DATA_BYTE = 0x01;  // Data field in SEND_KEY payload (purpose unknown, always 0x01)
 
 // Universally known Transfer Key for 1W key exchange (CMD 0x30).
 // Hardcoded in every io-homecontrol device worldwide. During 1W pairing, the
@@ -168,8 +168,8 @@ class IOHomecontrol : public Component {
   /// Send EXECUTE command (CMD 0x00) with main parameter.
   /// source_address identifies the controller channel paired to the motor.
   /// target_address is typically ADDR_BROADCAST.
-  bool send_execute(uint32_t source_address, uint16_t main_param, uint8_t fp1 = 0x00, uint8_t fp2 = 0x00,
-                    uint32_t target_address = ADDR_BROADCAST);
+  bool send_execute(uint32_t source_address, uint16_t main_param, uint8_t func_param_1 = 0x00,
+                    uint8_t func_param_2 = 0x00, uint32_t target_address = ADDR_BROADCAST);
 
   /// Pair as a new controller: sends SEND_KEY + PAIR_1W
   /// Motor must be in learning mode (hold PROG on existing remote first)
@@ -178,8 +178,6 @@ class IOHomecontrol : public Component {
  protected:
   /// CRC-16/KERMIT helpers
   static uint16_t compute_crc_(const uint8_t *data, size_t len);
-  static bool verify_crc_(const std::vector<uint8_t> &packet);
-
   /// 1W HMAC computation (AES-128-ECB)
   void compute_1w_hmac_(const uint8_t *frame_data, size_t len, uint16_t seq, uint8_t *mac_out);
 
@@ -198,7 +196,7 @@ class IOHomecontrol : public Component {
   bool transmit_serial_(const uint8_t *frame, size_t len);
 
   /// Parse a received io-homecontrol frame
-  void parse_frame_(const std::vector<uint8_t> &packet, float rssi);
+  void parse_frame_(const uint8_t *packet, size_t packet_size);
 
   /// Decrypt a 1W private key from a captured CMD 0x30 (SEND_KEY) frame
   static void decrypt_1w_key_(const uint8_t *source_addr_3b, const uint8_t *enc_key_16b, uint8_t *out_key_16b);
@@ -231,10 +229,13 @@ class IOHomecontrol : public Component {
   // UART RX state (async serial from CC1101 GDO0)
   uint8_t gdo0_pin_{0};
   RxState rx_state_{RxState::WAITING_SYNC_FF};
-  std::vector<uint8_t> rx_buffer_;
+  std::array<uint8_t, MAX_PACKET_SIZE> rx_buffer_{};
+  size_t rx_buffer_len_{0};
   size_t rx_expected_len_{0};
   uint32_t rx_frame_start_{0};
 
+  // Grows per unique source address seen. In pairing mode on busy networks,
+  // consider limiting to prevent unbounded growth.
   std::vector<SequenceEntry> sequence_entries_;
 };
 

@@ -110,7 +110,7 @@ void IOHomecontrolCover::control(const cover::CoverCall &call) {
   }
 }
 
-void IOHomecontrolCover::update_from_sniffed(uint16_t main_param) {
+void IOHomecontrolCover::update_from_sniffed(uint32_t source_address, uint16_t main_param) {
   // Convert io-homecontrol main_param to ESPHome cover position
   // io-homecontrol: 0x0000 = fully open, 0xC800 = fully closed
   // ESPHome cover:  1.0 = fully open,    0.0 = fully closed
@@ -137,8 +137,8 @@ void IOHomecontrolCover::update_from_sniffed(uint16_t main_param) {
     return;  // Unknown param, don't update
   }
 
-  ESP_LOGI(TAG, "Sniffed command for 0x%06X: param=0x%04X -> position=%.0f%%", this->get_primary_address(), main_param,
-           this->position * 100.0f);
+  ESP_LOGI(TAG, "Sniffed command from 0x%06X for 0x%06X: param=0x%04X -> position=%.0f%%", source_address,
+           this->get_primary_address(), main_param, this->position * 100.0f);
   this->publish_state();
 }
 

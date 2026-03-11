@@ -28,7 +28,7 @@ class IOHomecontrolCover : public cover::Cover, public Component {
   bool has_address(uint32_t address) const;
 
   /// Called by hub when an EXECUTE command from a matching source is sniffed
-  void update_from_sniffed(uint16_t main_param);
+  void update_from_sniffed(uint32_t source_address, uint16_t main_param);
 
  protected:
   void control(const cover::CoverCall &call) override;

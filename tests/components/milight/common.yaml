@@ -1,0 +1,75 @@
+milight:
+  ce_pin: ${ce_pin}
+  cs_pin: ${cs_pin}
+  packet_repeats: 50
+
+light:
+  - platform: milight
+    id: milight_rgbcct
+    name: "MiLight RGB CCT"
+    remote_type: rgb_cct
+    mi_device_id: 0xAB01
+    group_id: 1
+  - platform: milight
+    id: milight_rgbw
+    name: "MiLight RGBW"
+    remote_type: rgbw
+    mi_device_id: 0xCD02
+    group_id: 2
+  - platform: milight
+    id: milight_cct
+    name: "MiLight CCT"
+    remote_type: cct
+    mi_device_id: 0xEF03
+    group_id: 3
+  - platform: milight
+    id: milight_rgb
+    name: "MiLight RGB"
+    remote_type: rgb
+    mi_device_id: 0x1234
+    group_id: 0
+  - platform: milight
+    id: milight_fut089
+    name: "MiLight FUT089"
+    remote_type: fut089
+    mi_device_id: 0x5678
+    group_id: 5
+  - platform: milight
+    id: milight_fut091
+    name: "MiLight FUT091"
+    remote_type: fut091
+    mi_device_id: 0x9ABC
+    group_id: 4
+  - platform: milight
+    id: milight_fut020
+    name: "MiLight FUT020"
+    remote_type: fut020
+    mi_device_id: 0xDEF0
+    group_id: 0
+
+# Test pair/unpair buttons
+button:
+  - platform: milight
+    name: "Pair RGBW"
+    mi_device_id: 0xCD02
+    group_id: 2
+    remote_type: rgbw
+    command: pair
+  - platform: milight
+    name: "Unpair RGBW"
+    mi_device_id: 0xCD02
+    group_id: 2
+    remote_type: rgbw
+    command: unpair
+  - platform: milight
+    name: "Pair RGB CCT"
+    mi_device_id: 0xAB01
+    group_id: 1
+    remote_type: rgb_cct
+    command: pair
+  - platform: milight
+    name: "Unpair RGB CCT"
+    mi_device_id: 0xAB01
+    group_id: 1
+    remote_type: rgb_cct
+    command: unpair

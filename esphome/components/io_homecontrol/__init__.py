@@ -17,6 +17,7 @@ CONF_SOURCE_ADDRESS = "source_address"
 CONF_TX_REPEATS = "tx_repeats"
 CONF_PAIRING_MODE = "pairing_mode"
 CONF_INITIAL_SEQUENCE = "initial_sequence"
+CONF_MIN_RSSI = "min_rssi"
 
 io_homecontrol_ns = cg.esphome_ns.namespace("io_homecontrol")
 IOHomecontrol = io_homecontrol_ns.class_("IOHomecontrol", cg.Component)
@@ -74,6 +75,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_TX_REPEATS, default=4): cv.int_range(min=1, max=10),
             cv.Optional(CONF_PAIRING_MODE, default=False): cv.boolean,
             cv.Optional(CONF_INITIAL_SEQUENCE): cv.uint16_t,
+            cv.Optional(CONF_MIN_RSSI, default=-90.0): cv.float_range(
+                min=-120.0, max=0.0
+            ),
         }
     ).extend(cv.COMPONENT_SCHEMA),
     validate_config,
@@ -96,3 +100,4 @@ async def to_code(config):
     cg.add(var.set_tx_repeats(config[CONF_TX_REPEATS]))
     if CONF_INITIAL_SEQUENCE in config:
         cg.add(var.set_initial_sequence(config[CONF_INITIAL_SEQUENCE]))
+    cg.add(var.set_min_rssi(config[CONF_MIN_RSSI]))

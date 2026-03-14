@@ -134,6 +134,8 @@ enum class RxState : uint8_t {
 
 // UART RX timeout: max time to receive a complete packet after sync
 static constexpr uint32_t UART_RX_TIMEOUT_MS = 20;
+// Default minimum RSSI threshold (dBm) to reject noise-triggered frames
+static constexpr float DEFAULT_MIN_RSSI = -90.0f;
 // UART RX buffer size (must be >= MAX_PACKET_SIZE)
 static constexpr int UART_RX_BUF_SIZE = 256;
 
@@ -160,6 +162,7 @@ class IOHomecontrol : public Component {
   void set_tx_repeats(uint8_t repeats) { this->tx_repeats_ = repeats; }
   void set_pairing_mode(bool mode) { this->pairing_mode_ = mode; }
   void set_initial_sequence(uint16_t seq) { this->initial_sequence_ = seq; }
+  void set_min_rssi(float rssi) { this->min_rssi_ = rssi; }
 
 #ifdef USE_IO_HOMECONTROL_COVER
   void register_cover(IOHomecontrolCover *cover);
@@ -241,8 +244,9 @@ class IOHomecontrol : public Component {
   size_t rx_buffer_len_{0};
   size_t rx_expected_len_{0};
   uint32_t rx_frame_start_{0};
-  float rx_rssi_{0.0f};  // RSSI sampled at sync word detection
-  uint8_t rx_lqi_{0};    // LQI sampled at sync word detection
+  float rx_rssi_{0.0f};               // RSSI sampled at sync word detection
+  uint8_t rx_lqi_{0};                 // LQI sampled at sync word detection
+  float min_rssi_{DEFAULT_MIN_RSSI};  // Minimum RSSI to accept a frame
 
   // Grows per unique source address seen. In pairing mode on busy networks,
   // consider limiting to prevent unbounded growth.

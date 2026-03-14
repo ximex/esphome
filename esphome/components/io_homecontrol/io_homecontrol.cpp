@@ -112,8 +112,9 @@ void IOHomecontrol::dump_config() {
   if (this->pairing_mode_) {
     ESP_LOGCONFIG(TAG,
                   "io-homecontrol:\n"
-                  "  Pairing Mode: %s",
-                  TRUEFALSE(this->pairing_mode_));
+                  "  Pairing Mode: %s\n"
+                  "  Min RSSI: %.1f dBm",
+                  TRUEFALSE(this->pairing_mode_), this->min_rssi_);
   } else {
     char hex_buf[KEY_SIZE * 2 + 1];
     format_hex_to(hex_buf, this->key_.data(), KEY_SIZE);
@@ -122,8 +123,9 @@ void IOHomecontrol::dump_config() {
                   "  Pairing Mode: %s\n"
                   "  Source Address: 0x%06X\n"
                   "  TX Repeats: %u\n"
+                  "  Min RSSI: %.1f dBm\n"
                   "  Key: %s",
-                  TRUEFALSE(this->pairing_mode_), this->source_address_, this->tx_repeats_, hex_buf);
+                  TRUEFALSE(this->pairing_mode_), this->source_address_, this->tx_repeats_, this->min_rssi_, hex_buf);
   }
 }
 
@@ -194,14 +196,21 @@ void IOHomecontrol::process_uart_rx_() {
         break;
 
       case RxState::READING_HEADER: {
-        // First byte after sync is CtrlByte0
+        // First byte after sync is CtrlByte0 — check RSSI before committing to frame
+        if (this->rx_rssi_ < this->min_rssi_) {
+          ESP_LOGD(TAG, "Frame rejected: RSSI=%.1fdBm below threshold %.1fdBm (ctrl0=0x%02X)", this->rx_rssi_,
+                   this->min_rssi_, byte);
+          this->rx_state_ = RxState::WAITING_SYNC_FF;
+          break;
+        }
+
         this->rx_buffer_[this->rx_buffer_len_++] = byte;
         size_t frame_len_field = byte & CTRL0_LEN_MASK;
         this->rx_expected_len_ = frame_len_field + CTRL0_L_EXCLUDED_BYTES;
 
         if (this->rx_expected_len_ < MIN_FRAME_SIZE || this->rx_expected_len_ > MAX_PACKET_SIZE) {
-          ESP_LOGD(TAG, "Invalid CtrlByte0 length: 0x%02X (expected %u bytes)", byte,
-                   static_cast<unsigned>(this->rx_expected_len_));
+          ESP_LOGD(TAG, "Invalid CtrlByte0 length: 0x%02X (expected %u bytes) RSSI=%.1fdBm", byte,
+                   static_cast<unsigned>(this->rx_expected_len_), this->rx_rssi_);
           this->rx_state_ = RxState::WAITING_SYNC_FF;
         } else {
           this->rx_state_ = RxState::READING_FRAME;

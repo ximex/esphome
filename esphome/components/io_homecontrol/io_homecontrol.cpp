@@ -180,7 +180,9 @@ void IOHomecontrol::process_uart_rx_() {
 
       case RxState::WAITING_SYNC_33:
         if (byte == 0x33) {
-          // Sync word detected — next byte is CtrlByte0
+          // Sync word detected — sample RSSI/LQI while signal is still present
+          this->rx_rssi_ = this->radio_->read_rssi();
+          this->rx_lqi_ = this->radio_->read_lqi();
           this->rx_state_ = RxState::READING_HEADER;
           this->rx_buffer_len_ = 0;
           this->rx_frame_start_ = now;
@@ -649,12 +651,26 @@ void IOHomecontrol::parse_frame_(const uint8_t *packet, size_t packet_size) {
     return;
   }
 
+  // Log raw packet with signal quality (RSSI/LQI sampled at sync word detection)
+  char raw_dbg[MAX_PACKET_SIZE * 2 + 1];
+  format_hex_to(raw_dbg, packet, std::min(packet_size, MAX_PACKET_SIZE));
+  ESP_LOGD(TAG, "parse_frame: packet_size=%u ctrl0=0x%02X actual_size=%u RSSI=%.1fdBm LQI=%u raw=%s",
+           static_cast<unsigned>(packet_size), ctrl0, static_cast<unsigned>(actual_size), this->rx_rssi_, this->rx_lqi_,
+           raw_dbg);
+
   // Verify CRC using actual frame size (not the radio-delivered packet size)
   size_t crc_offset = actual_size - CRC_SIZE;
   uint16_t computed_crc = compute_crc_(packet, crc_offset);
   uint16_t received_crc = packet[crc_offset] | (packet[crc_offset + 1] << 8);
   if (computed_crc != received_crc) {
-    ESP_LOGW(TAG, "CRC mismatch (computed=0x%04X received=0x%04X)", computed_crc, received_crc);
+    // Also try byte-swapped received CRC and CRC over full packet_size
+    uint16_t received_swapped = (packet[crc_offset] << 8) | packet[crc_offset + 1];
+    uint16_t crc_full = compute_crc_(packet, packet_size - CRC_SIZE);
+    uint16_t recv_full = packet[packet_size - 2] | (packet[packet_size - 1] << 8);
+    ESP_LOGW(TAG, "CRC mismatch: computed=0x%04X received=0x%04X (swapped=0x%04X)", computed_crc, received_crc,
+             received_swapped);
+    ESP_LOGW(TAG, "  crc_offset=%u, full_pkt_crc=0x%04X full_pkt_recv=0x%04X", static_cast<unsigned>(crc_offset),
+             crc_full, recv_full);
     return;
   }
 

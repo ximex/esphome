@@ -241,6 +241,8 @@ class IOHomecontrol : public Component {
   size_t rx_buffer_len_{0};
   size_t rx_expected_len_{0};
   uint32_t rx_frame_start_{0};
+  float rx_rssi_{0.0f};  // RSSI sampled at sync word detection
+  uint8_t rx_lqi_{0};    // LQI sampled at sync word detection
 
   // Grows per unique source address seen. In pairing mode on busy networks,
   // consider limiting to prevent unbounded growth.

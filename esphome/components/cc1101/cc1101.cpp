@@ -168,6 +168,16 @@ void CC1101Component::configure() {
   }
 }
 
+float CC1101Component::read_rssi() {
+  this->read_(Register::RSSI);
+  return (static_cast<int8_t>(this->state_.RSSI) * RSSI_STEP) - RSSI_OFFSET;
+}
+
+uint8_t CC1101Component::read_lqi() {
+  this->read_(Register::LQI);
+  return this->state_.LQI & STATUS_LQI_MASK;
+}
+
 void CC1101Component::call_listeners_(const std::vector<uint8_t> &packet, float freq_offset, float rssi, uint8_t lqi) {
   for (auto &listener : this->listeners_) {
     listener->on_packet(packet, freq_offset, rssi, lqi);

@@ -98,6 +98,11 @@ class CC1101Component final : public Component,
   void go_tx() { this->enter_tx_(); }
   Trigger<std::vector<uint8_t>, float, float, uint8_t> *get_packet_trigger() { return &this->packet_trigger_; }
 
+  /// Read current RSSI from CC1101 status register (valid while in RX)
+  float read_rssi();
+  /// Read current LQI from CC1101 status register (valid while in RX)
+  uint8_t read_lqi();
+
  protected:
   uint16_t chip_id_{0};
   bool initialized_{false};

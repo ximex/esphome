@@ -669,17 +669,34 @@ void IOHomecontrol::parse_frame_(const uint8_t *packet, size_t packet_size) {
 
   // Verify CRC using actual frame size (not the radio-delivered packet size)
   size_t crc_offset = actual_size - CRC_SIZE;
-  uint16_t computed_crc = compute_crc_(packet, crc_offset);
-  uint16_t received_crc = packet[crc_offset] | (packet[crc_offset + 1] << 8);
-  if (computed_crc != received_crc) {
-    // Also try byte-swapped received CRC and CRC over full packet_size
-    uint16_t received_swapped = (packet[crc_offset] << 8) | packet[crc_offset + 1];
-    uint16_t crc_full = compute_crc_(packet, packet_size - CRC_SIZE);
-    uint16_t recv_full = packet[packet_size - 2] | (packet[packet_size - 1] << 8);
-    ESP_LOGW(TAG, "CRC mismatch: computed=0x%04X received=0x%04X (swapped=0x%04X)", computed_crc, received_crc,
-             received_swapped);
-    ESP_LOGW(TAG, "  crc_offset=%u, full_pkt_crc=0x%04X full_pkt_recv=0x%04X", static_cast<unsigned>(crc_offset),
-             crc_full, recv_full);
+  uint16_t received_le = packet[crc_offset] | (packet[crc_offset + 1] << 8);
+  uint16_t received_be = (packet[crc_offset] << 8) | packet[crc_offset + 1];
+
+  // Trial CRC variants to identify the correct algorithm
+  // KERMIT: init=0x0000, refin=true, refout=true, xorout=0x0000
+  uint16_t kermit = crc16(packet, static_cast<uint16_t>(crc_offset), 0x0000, 0x8408, true, true);
+  // X.25: init=0xFFFF, refin=true, refout=true, xorout=0xFFFF
+  uint16_t x25 = crc16(packet, static_cast<uint16_t>(crc_offset), 0xFFFF, 0x8408, true, false);
+  // KERMIT skip CtrlByte0
+  uint16_t kermit_s1 = crc16(packet + 1, static_cast<uint16_t>(crc_offset - 1), 0x0000, 0x8408, true, true);
+  // X.25 skip CtrlByte0
+  uint16_t x25_s1 = crc16(packet + 1, static_cast<uint16_t>(crc_offset - 1), 0xFFFF, 0x8408, true, false);
+  // CCITT-FALSE: init=0xFFFF, non-reflected
+  uint16_t ccitt_f = crc16be(packet, static_cast<uint16_t>(crc_offset), 0xFFFF, 0x1021);
+  // XMODEM: init=0x0000, non-reflected
+  uint16_t xmodem = crc16be(packet, static_cast<uint16_t>(crc_offset), 0x0000, 0x1021);
+  // CCITT-FALSE skip CtrlByte0
+  uint16_t ccitt_f_s1 = crc16be(packet + 1, static_cast<uint16_t>(crc_offset - 1), 0xFFFF, 0x1021);
+  // XMODEM skip CtrlByte0
+  uint16_t xmodem_s1 = crc16be(packet + 1, static_cast<uint16_t>(crc_offset - 1), 0x0000, 0x1021);
+
+  ESP_LOGW(TAG, "CRC trial: recv_LE=0x%04X recv_BE=0x%04X", received_le, received_be);
+  ESP_LOGW(TAG, "  KERMIT=0x%04X X25=0x%04X KERMIT_s1=0x%04X X25_s1=0x%04X", kermit, x25, kermit_s1, x25_s1);
+  ESP_LOGW(TAG, "  CCITT_F=0x%04X XMODEM=0x%04X CCITT_F_s1=0x%04X XMODEM_s1=0x%04X", ccitt_f, xmodem, ccitt_f_s1,
+           xmodem_s1);
+
+  uint16_t computed_crc = kermit;  // Current algorithm
+  if (computed_crc != received_le) {
     return;
   }
 

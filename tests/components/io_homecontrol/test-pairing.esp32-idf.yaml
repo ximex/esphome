@@ -1,37 +1,28 @@
 substitutions:
-  cs_pin: GPIO12
-  rst_pin: GPIO13
-  busy_pin: GPIO25
-  dio1_pin: GPIO26
+  cs_pin: GPIO5
+  gdo0_pin: GPIO4
+  gdo0_pin_num: "4"
 
 packages:
   spi: !include ../../test_build_components/common/spi/esp32-idf.yaml
 
-sx126x:
-  id: lora_radio
-  dio1_pin: ${dio1_pin}
+cc1101:
+  id: cc1101_radio
   cs_pin: ${cs_pin}
-  busy_pin: ${busy_pin}
-  rst_pin: ${rst_pin}
-  hw_version: sx1262
-  rf_switch: true
-  tcxo_voltage: 1_8V
-  tcxo_delay: 5ms
-  modulation: FSK
-  frequency: 868950000
-  bitrate: 38400
-  deviation: 19200
-  bandwidth: 78_2kHz
-  shaping: NONE
-  sync_value: [0xFF, 0x33]
-  preamble_size: 64
-  preamble_detect: 2
-  crc_enable: false
-  payload_length: 0
-  pa_power: 14
-  rx_start: true
+  gdo0_pin:
+    number: ${gdo0_pin}
+    mode: INPUT
+  frequency: 868.95MHz
+  modulation_type: 2-FSK
+  symbol_rate: 38400
+  fsk_deviation: 19.2kHz
+  filter_bandwidth: 203kHz
+  sync_mode: None
+  num_preamble: 0
+  packet_mode: false
 
 io_homecontrol:
   id: iohc_hub
-  sx126x_id: lora_radio
+  cc1101_id: cc1101_radio
+  gdo0_pin: ${gdo0_pin_num}
   pairing_mode: true

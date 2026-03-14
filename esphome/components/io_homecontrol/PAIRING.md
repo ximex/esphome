@@ -61,23 +61,28 @@ Press buttons on your existing remote (up/down/stop for each channel).
 The log will show each frame with addresses:
 
 ```
-[io_homecontrol] RX 1W frame: order=0 len=22 ...
+[io_homecontrol] RX 1W frame on CH2 (...): order=0 size=25 ...
 [io_homecontrol]   Target: 0x112233 | Source: 0xAABBCC
 [io_homecontrol]   CMD: 0x00 (EXECUTE)
 [io_homecontrol]   ============ DISCOVERED ============
 [io_homecontrol]   Remote/Controller address: 0xAABBCC
 [io_homecontrol]   Actuator/Motor address:    0x112233
 [io_homecontrol]   >> EXECUTE OPEN (param=0x0000)
-[io_homecontrol]   >> Cover config:  address: 0x112233
+[io_homecontrol]   >> Cover config:  address: 0xAABBCC
 [io_homecontrol]   ======================================
 ```
 
 Write down:
-- **Source address** = your remote's address (same for all channels)
+- **Source address** = your remote's address per channel (e.g. `0xAABBCC`).
+  Multi-channel remotes use a **different source address per channel**.
 - **Target address** = each motor's individual address (different per channel)
 
+The **cover `address` config** uses the **source address** (the remote channel
+identity), not the motor/target address. This is because the ESP32 impersonates
+the remote when sending commands.
+
 If the target is `0x00003F`, the remote is broadcasting to all motors.
-Press individual channel buttons to find per-motor addresses.
+Press individual channel buttons to find per-channel source addresses.
 
 ## Step 3: Capture the Key (Pairing Sniff)
 
@@ -155,10 +160,10 @@ io_homecontrol:
 cover:
   - platform: io_homecontrol
     name: "Living Room Blinds"
-    address: 0x112233               # From step 2 (motor address)
+    address: 0xAABBCC               # From step 2 (remote channel source address)
   - platform: io_homecontrol
     name: "Bedroom Blinds"
-    address: 0x445566               # From step 2 (another motor)
+    address: 0xAABBCD               # From step 2 (another remote channel)
 ```
 
 ---
@@ -279,7 +284,7 @@ Bytes 9-24:  Encrypted private key (16 bytes)
 Byte  25:    Manufacturer ID (0x02 = Somfy)
 Byte  26:    Data byte (0x01)
 Bytes 27-28: Sequence number (MSB first)
-Bytes 29-30: CRC-16/KERMIT (LSB first)
+Bytes 29-30: CRC-16/X.25 (LSB first)
 ```
 
 **No HMAC** is appended - the motor doesn't have the key yet.
@@ -316,7 +321,7 @@ Byte  8:     CMD = 0x2E
 Byte  9:     Data = 0x00
 Bytes 10-11: Sequence number (MSB first)
 Bytes 12-17: HMAC (first 6 bytes of AES-128-ECB encrypted IV)
-Bytes 18-19: CRC-16/KERMIT (LSB first)
+Bytes 18-19: CRC-16/X.25 (LSB first)
 ```
 
 The HMAC proves the controller possesses the key it just transmitted.

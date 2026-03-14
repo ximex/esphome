@@ -7,7 +7,6 @@
 
 #include <array>
 #include <initializer_list>
-#include <vector>
 
 #ifdef USE_ESP_IDF
 #include "driver/uart.h"
@@ -139,6 +138,10 @@ static constexpr float DEFAULT_MIN_RSSI = -90.0f;
 // UART RX buffer size (must be >= MAX_PACKET_SIZE)
 static constexpr int UART_RX_BUF_SIZE = 256;
 
+// --- StaticVector capacity limits ---
+static constexpr size_t MAX_SEQ_ENTRIES = 16;  // Per-hub sequence tracking table
+static constexpr size_t MAX_COVERS = 8;        // Max cover entities per hub
+
 // Persistent sequence number entry for a source address
 struct SequenceEntry {
   uint32_t address;
@@ -215,7 +218,7 @@ class IOHomecontrol : public Component {
 
   cc1101::CC1101Component *radio_{nullptr};
 #ifdef USE_IO_HOMECONTROL_COVER
-  std::vector<IOHomecontrolCover *> covers_;
+  StaticVector<IOHomecontrolCover *, MAX_COVERS> covers_;
 #endif
 
   std::array<uint8_t, KEY_SIZE> key_{};
@@ -248,9 +251,9 @@ class IOHomecontrol : public Component {
   uint8_t rx_lqi_{0};                 // LQI sampled at sync word detection
   float min_rssi_{DEFAULT_MIN_RSSI};  // Minimum RSSI to accept a frame
 
-  // Grows per unique source address seen. In pairing mode on busy networks,
-  // consider limiting to prevent unbounded growth.
-  std::vector<SequenceEntry> sequence_entries_;
+  // Capped at MAX_SEQ_ENTRIES unique source addresses.
+  // In pairing mode on busy networks, oldest entries are evicted when full.
+  StaticVector<SequenceEntry, MAX_SEQ_ENTRIES> sequence_entries_;
 };
 
 }  // namespace esphome::io_homecontrol

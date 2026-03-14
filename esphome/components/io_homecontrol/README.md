@@ -43,15 +43,16 @@ io_homecontrol:
   # initial_sequence: 1000         # Override starting sequence number (optional)
 ```
 
-| Option             | Required | Default | Description                                              |
-|--------------------|:--------:|:-------:|----------------------------------------------------------|
-| `cc1101_id`        | **Yes**  | —       | ID of the CC1101 radio component                         |
-| `gdo0_pin`         | **Yes**  | —       | GPIO number of CC1101 GDO0 pin                           |
-| `source_address`   | Yes*     | —       | 3-byte address (0x000000–0xFFFFFF). Controller identity. |
-| `key`              | Yes*     | —       | 16-byte AES-128 key as 32-character hex string           |
-| `tx_repeats`       | No       | `4`     | Number of times each frame is transmitted (1–10)         |
-| `pairing_mode`     | No       | `false` | Enable pairing sniffer mode                              |
-| `initial_sequence` | No       | —       | Force a starting sequence number (overrides flash value) |
+| Option             | Required | Default | Description                                               |
+|--------------------|:--------:|:-------:|-----------------------------------------------------------|
+| `cc1101_id`        | **Yes**  | —       | ID of the CC1101 radio component                          |
+| `gdo0_pin`         | **Yes**  | —       | GPIO number of CC1101 GDO0 pin                            |
+| `source_address`   | Yes*     | —       | 3-byte address (0x000000–0xFFFFFF). Controller identity.  |
+| `key`              | Yes*     | —       | 16-byte AES-128 key as 32-character hex string            |
+| `tx_repeats`       | No       | `4`     | Number of times each frame is transmitted (1–10)          |
+| `pairing_mode`     | No       | `false` | Enable pairing sniffer mode                               |
+| `initial_sequence` | No       | —       | Force a starting sequence number (overrides flash value)  |
+| `min_rssi`         | No       | `-90.0` | Minimum RSSI threshold (dBm) to accept frames (-120 to 0) |
 
 *\* Required when `pairing_mode` is `false`.*
 
@@ -123,11 +124,11 @@ cover:
   - platform: io_homecontrol
     io_homecontrol_id: iohc_hub
     name: "Living Room Blinds"
-    address: 0x112233
+    address: 0xAABBCC             # Remote channel address paired to this motor
   - platform: io_homecontrol
     io_homecontrol_id: iohc_hub
     name: "Bedroom Blinds"
-    address: 0x445566
+    address: 0xAABBCD             # Different remote channel address
 ```
 
 ## Getting the Key and Addresses

@@ -32,21 +32,21 @@ IEEE 802.15.4(g) / ETSI EN 300-220, **868 MHz ISM band** (Europe).
 
 ### Modulation Parameters
 
-| Parameter       | Value                  |
-|-----------------|------------------------|
-| Modulation      | 2-FSK (NRZ, LSB first) |
-| Data rate       | 38 400 bps             |
-| Frequency dev.  | ±19.2 kHz              |
-| Encoding        | NRZ (Non-Return-to-Zero) |
-| Bit order       | LSB first per byte     |
+| Parameter      | Value                    |
+|----------------|--------------------------|
+| Modulation     | 2-FSK (NRZ, LSB first)   |
+| Data rate      | 38 400 bps               |
+| Frequency dev. | ±19.2 kHz                |
+| Encoding       | NRZ (Non-Return-to-Zero) |
+| Bit order      | LSB first per byte       |
 
 ### Frequency Channels
 
-| Channel | Center Freq  | Range               | Used by     |
-|---------|-------------|---------------------|-------------|
-| **CH1** | 868.25 MHz  | 868.0 – 868.6 MHz   | 2W only     |
-| **CH2** | 868.95 MHz  | 868.7 – 869.2 MHz   | **1W + 2W** |
-| **CH3** | 869.85 MHz  | 869.7 – 870.0 MHz   | 2W only     |
+| Channel | Center Freq | Range             | Used by     |
+|---------|-------------|-------------------|-------------|
+| **CH1** | 868.25 MHz  | 868.0 – 868.6 MHz | 2W only     |
+| **CH2** | 868.95 MHz  | 868.7 – 869.2 MHz | **1W + 2W** |
+| **CH3** | 869.85 MHz  | 869.7 – 870.0 MHz | 2W only     |
 
 Normal operation uses **CH2** exclusively. Pairing sniffer mode scans all three
 channels in round-robin (50 ms dwell per channel).
@@ -56,14 +56,14 @@ channels in round-robin (50 ms dwell per channel).
 The CC1101 is used in **asynchronous serial mode** (PKT_FORMAT = 3). The GDO0
 pin outputs/inputs a continuous UART data stream at 38 400 baud.
 
-| CC1101 Setting     | Value                    |
-|--------------------|--------------------------|
-| Frequency          | 868.95 MHz (CH2)         |
-| Modulation         | 2-FSK                    |
-| Symbol rate        | 38 400 baud              |
-| FSK deviation      | 19 200 Hz                |
-| Packet format      | Async serial (PKT_FORMAT=3) |
-| GDO0               | Bidirectional serial data |
+| CC1101 Setting | Value                       |
+|----------------|-----------------------------|
+| Frequency      | 868.95 MHz (CH2)            |
+| Modulation     | 2-FSK                       |
+| Symbol rate    | 38 400 baud                 |
+| FSK deviation  | 19 200 Hz                   |
+| Packet format  | Async serial (PKT_FORMAT=3) |
+| GDO0           | Bidirectional serial data   |
 
 > **Why CC1101?** io-homecontrol wraps each byte in UART framing (start + stop bits).
 > The CC1101's async serial mode handles this transparently. Radios like SX126x/SX127x
@@ -91,11 +91,11 @@ Every transmitted frame is preceded by a preamble for AGC lock and bit sync:
  preamble    sync1   sync2
 ```
 
-| Part       | Bytes          | Purpose                         |
-|------------|----------------|---------------------------------|
-| Preamble   | `0x55 × 10`   | Alternating bits for AGC + sync |
-| Sync word  | `0xFF 0x33`   | Frame delimiter                 |
-| Frame      | 11 – 34 bytes | Protocol data (see §3)          |
+| Part      | Bytes         | Purpose                         |
+|-----------|---------------|---------------------------------|
+| Preamble  | `0x55 × 10`   | Alternating bits for AGC + sync |
+| Sync word | `0xFF 0x33`   | Frame delimiter                 |
+| Frame     | 11 – 34 bytes | Protocol data (see §3)          |
 
 **TX timing:** Each frame is repeated **4 times** (configurable 1–10) with
 **40 ms** between repetitions.
@@ -135,15 +135,15 @@ stateDiagram-v2
 
 ### Size Constants
 
-| Constant             | Value | Description                                  |
-|----------------------|-------|----------------------------------------------|
-| `FRAME_HEADER_SIZE`  | 9     | CB0 + CB1 + Target(3) + Source(3) + CMD      |
-| `CTRL0_LEN_OVERHEAD` | 3     | CB0(1) + CRC(2) — excluded from length field |
-| `MIN_FRAME_SIZE`     | 11    | Header(9) + CRC(2)                           |
-| `MAX_FRAME_LEN`      | 31    | Max value in CB0 length field (5 bits)       |
-| `MAX_PACKET_SIZE`    | 34    | 31 + 3                                       |
-| `HMAC_AUTH_SIZE`     | 8     | Seq(2) + MAC(6)                              |
-| `SEND_KEY_MIN_SIZE`  | 31    | Minimum size of SEND_KEY frame               |
+| Constant                 | Value | Description                                  |
+|--------------------------|-------|----------------------------------------------|
+| `FRAME_HEADER_SIZE`      | 9     | CB0 + CB1 + Target(3) + Source(3) + CMD      |
+| `CTRL0_L_EXCLUDED_BYTES` | 3     | CB0(1) + CRC(2) — excluded from length field |
+| `MIN_FRAME_SIZE`         | 11    | Header(9) + CRC(2)                           |
+| `MAX_FRAME_LEN`          | 31    | Max value in CB0 length field (5 bits)       |
+| `MAX_PACKET_SIZE`        | 34    | 31 + 3                                       |
+| `HMAC_AUTH_SIZE`         | 8     | Seq(2) + MAC(6)                              |
+| `SEND_KEY_MIN_SIZE`      | 31    | Minimum size of SEND_KEY frame               |
 
 ### CtrlByte0 (byte 0)
 
@@ -156,20 +156,20 @@ stateDiagram-v2
                1W/2W
 ```
 
-| Bits | Field       | Values / Meaning                                      |
-|------|-------------|-------------------------------------------------------|
-| 7–6  | `order`     | Frame relationship in a sequence (see below)          |
-| 5    | `2W`        | `0` = **1W** (one-way), `1` = **2W** (two-way)       |
-| 4–0  | `frame_len` | `L = total_packet_bytes − 3` (excludes CB0 and CRC)  |
+| Bits | Field       | Values / Meaning                                    |
+|------|-------------|-----------------------------------------------------|
+| 7–6  | `order`     | Frame relationship in a sequence (see below)        |
+| 5    | `2W`        | `0` = **1W** (one-way), `1` = **2W** (two-way)      |
+| 4–0  | `frame_len` | `L = total_packet_bytes − 3` (excludes CB0 and CRC) |
 
 **Order field values:**
 
-| Value | Meaning              |
-|-------|----------------------|
-| `00`  | Single command       |
-| `01`  | Next in series       |
-| `10`  | Next in parallel     |
-| `11`  | Group end            |
+| Value | Meaning          |
+|-------|------------------|
+| `00`  | Single command   |
+| `01`  | Next in series   |
+| `10`  | Next in parallel |
+| `11`  | Group end        |
 
 > **Mask constants:** `CTRL0_2W_BIT = 0x20`, `CTRL0_LEN_MASK = 0x1F`
 
@@ -182,14 +182,14 @@ stateDiagram-v2
        └───┴───┴───┴───┴───┴───┴───┴───┘
 ```
 
-| Bit | Name               | Meaning                                      |
-|-----|--------------------|----------------------------------------------|
-| 7   | `BCN` Beacon       | `1` = allow routing via repeater             |
-| 6   | `RTE` Routed       | `1` = frame already been routed              |
-| 5   | `PSM` Power Save   | `1` = destination is in low-power mode       |
-| 4   | `ACK`              | `1` = device is ACK-capable (2W)             |
-| 3–2 | Reserved           | `00`                                         |
-| 1–0 | `V` Protocol ver  | Protocol version (0–3)                       |
+| Bit | Name             | Meaning                                |
+|-----|------------------|----------------------------------------|
+| 7   | `BCN` Beacon     | `1` = allow routing via repeater       |
+| 6   | `RTE` Routed     | `1` = frame already been routed        |
+| 5   | `PSM` Power Save | `1` = destination is in low-power mode |
+| 4   | `ACK`            | `1` = device is ACK-capable (2W)       |
+| 3–2 | Reserved         | `00`                                   |
+| 1–0 | `V` Protocol ver | Protocol version (0–3)                 |
 
 > **Mask constant:** `CTRL1_BEACON_BIT = 0x80`, `CTRL1_ACK_BIT = 0x10`
 
@@ -202,10 +202,11 @@ Each address is **3 bytes, big-endian** (MSB first).
 
 ### CRC
 
-- Algorithm: **CRC-16/KERMIT**
+- Algorithm: **CRC-16/X.25**
 - Polynomial: `0x8408` (reflected CRC-16/CCITT)
-- Initial value: `0x0000`
-- Final XOR: none
+- Initial value: `0xFFFF`
+- Final XOR: `0xFFFF`
+- Reflected in/out: yes
 - Coverage: all bytes from CtrlByte0 up to (but not including) the two CRC bytes
 - Byte order in frame: **LSB first** (little-endian)
 
@@ -216,7 +217,7 @@ Each address is **3 bytes, big-endian** (MSB first).
 ```
 Offset  0    1    2    3    4    5    6    7    8    9   10   11   12  ...  n-8  n-7  n-6  n-5  n-4  n-3  n-2  n-1
        ┌────┬────┬────────────────┬────────────────┬────┬────────────────────┬────┬────────────────────┬────┬────┐
-       │CB0 │CB1 │  Source (3 B)  │  Target (3 B)  │CMD │      Data          │    Seq (2 B)           │MAC (6 B) │CRC │CRC │
+       │CB0 │CB1 │  Target (3 B)  │  Source (3 B)  │CMD │      Data          │    Seq (2 B)           │MAC (6 B) │CRC │CRC │
        └────┴────┴────────────────┴────────────────┴────┴────────────────────┴────┴────────────────────┴────┴────┘
 ```
 
@@ -299,13 +300,13 @@ Offset  9     10    11   12    13    14
 
 #### MainParam Values
 
-| Value    | Constant  | Meaning                                 |
-|----------|-----------|------------------------------------------|
-| `0x0000` | `OPEN`    | Fully open (UP)                          |
+| Value    | Constant  | Meaning                                    |
+|----------|-----------|--------------------------------------------|
+| `0x0000` | `OPEN`    | Fully open (UP)                            |
 | `0x0001`–`0xC7FF` | — | Intermediate position (see formula below) |
-| `0xC800` | `CLOSE`   | Fully closed (DOWN)                      |
-| `0xD200` | `STOP`    | Stop movement immediately                |
-| `0xD300` | `MY_POS`  | Go to preset "My" position               |
+| `0xC800` | `CLOSE`   | Fully closed (DOWN)                        |
+| `0xD200` | `STOP`    | Stop movement immediately                  |
+| `0xD300` | `MY_POS`  | Go to preset "My" position                 |
 
 **Position formula** (ESPHome ↔ protocol mapping):
 
@@ -344,11 +345,11 @@ graph TD
     SK -->|"2W challenge-response"| AUTH2W["2W Frame Authentication"]
 ```
 
-| Key              | Size   | Purpose                        | How obtained                     |
-|------------------|--------|--------------------------------|----------------------------------|
-| **Transfer Key** | 16 B   | Encrypts private key in pairing | Hardcoded in all devices         |
-| **Private Key**  | 16 B   | 1W HMAC authentication          | Generated by controller          |
-| **Stack Key**    | 16 B   | 2W challenge-response auth      | Burned at manufacturing (secret) |
+| Key              | Size | Purpose                         | How obtained                     |
+|------------------|------|---------------------------------|----------------------------------|
+| **Transfer Key** | 16 B | Encrypts private key in pairing | Hardcoded in all devices         |
+| **Private Key**  | 16 B | 1W HMAC authentication          | Generated by controller          |
+| **Stack Key**    | 16 B | 2W challenge-response auth      | Burned at manufacturing (secret) |
 
 **Hardcoded Transfer Key** (universally known):
 
@@ -489,10 +490,10 @@ sequenceDiagram
 
 ## 7. ACK / NACK Mechanism
 
-| Mode | CtrlByte1 bit 4 | Behavior                                          |
-|------|-----------------|---------------------------------------------------|
-| **1W** | `0`           | No ACK. Reliability by frame repetition (4× default) |
-| **2W** | `1`           | ACK capable. Bidirectional confirmation           |
+| Mode   | CtrlByte1 bit 4 | Behavior                                             |
+|--------|-----------------|------------------------------------------------------|
+| **1W** | `0`             | No ACK. Reliability by frame repetition (4× default) |
+| **2W** | `1`             | ACK capable. Bidirectional confirmation              |
 
 There is no NACK — the motor simply ignores frames that fail authentication or
 sequence number checks.
@@ -659,45 +660,45 @@ Formula: param = round((1.0 - position) × 0xC800)
 
 ### Node Type Classification (3-bit field in discovery frames)
 
-| Code | Type                       |
-|------|----------------------------|
-| `001`| Actuator (1W)              |
-| `010`| Sensor                     |
-| `011`| Video System (1W)          |
-| `100`| Remote Controller          |
-| `101`| Protocol Gateway (1W)      |
-| `110`| Infrastructure             |
-| `111`| Group (1W)                 |
+| Code | Type                  |
+|------|-----------------------|
+| `001`| Actuator (1W)         |
+| `010`| Sensor                |
+| `011`| Video System (1W)     |
+| `100`| Remote Controller     |
+| `101`| Protocol Gateway (1W) |
+| `110`| Infrastructure        |
+| `111`| Group (1W)            |
 
 ### Product Type Table
 
 | Code | Product Type                  |
 |------|-------------------------------|
-| 0    | Unknown                        |
-| 1    | Venetian Blind                 |
-| 2    | Rolling Shutter                |
-| 3    | Vertical Awning                |
-| 4    | Window Opener                  |
-| 5    | Garage Door Opener             |
-| 6    | Light                          |
-| 7    | Gate Opener                    |
-| 8    | Rolling Door Opener            |
-| 9    | Motorized Bolt                 |
-| 10   | Interior Blind                 |
-| 11   | SCD                            |
-| 12   | Beacon                         |
-| 13   | Dual Shutter                   |
-| 14   | Temperature Control Interface  |
-| 15   | On/Off Switch                  |
-| 16   | Horizontal Awning              |
-| 17   | External Venetian Blind        |
-| 18   | Louvre Blind                   |
-| 19   | Curtain Track                  |
-| 20   | Ventilation Point              |
-| 21   | Exterior Heating               |
-| 22   | Heat Pump                      |
-| 23   | Intrusion Alarm                |
-| 24   | Swinging Shutter               |
+| 0    | Unknown                       |
+| 1    | Venetian Blind                |
+| 2    | Rolling Shutter               |
+| 3    | Vertical Awning               |
+| 4    | Window Opener                 |
+| 5    | Garage Door Opener            |
+| 6    | Light                         |
+| 7    | Gate Opener                   |
+| 8    | Rolling Door Opener           |
+| 9    | Motorized Bolt                |
+| 10   | Interior Blind                |
+| 11   | SCD                           |
+| 12   | Beacon                        |
+| 13   | Dual Shutter                  |
+| 14   | Temperature Control Interface |
+| 15   | On/Off Switch                 |
+| 16   | Horizontal Awning             |
+| 17   | External Venetian Blind       |
+| 18   | Louvre Blind                  |
+| 19   | Curtain Track                 |
+| 20   | Ventilation Point             |
+| 21   | Exterior Heating              |
+| 22   | Heat Pump                     |
+| 23   | Intrusion Alarm               |
+| 24   | Swinging Shutter              |
 
 ---
 
@@ -705,19 +706,19 @@ Formula: param = round((1.0 - position) × 0xC800)
 
 ### Special Addresses
 
-| Address    | Meaning                        |
-|------------|--------------------------------|
-| `0x00003F` | Broadcast (all devices)        |
-| `0x000000` | Group address                  |
-| `0xFFFFFF` | Alternate broadcast            |
-| `0xFFFFFE` | P2P and broadcast sender       |
-| `0xFFFDFF` | RS485 / SDN setting tool       |
-| `0x00003B` | Unknown purpose                |
+| Address    | Meaning                  |
+|------------|--------------------------|
+| `0x00003F` | Broadcast (all devices)  |
+| `0x000000` | Group address            |
+| `0xFFFFFF` | Alternate broadcast      |
+| `0xFFFFFE` | P2P and broadcast sender |
+| `0xFFFDFF` | RS485 / SDN setting tool |
+| `0x00003B` | Unknown purpose          |
 
 ### Manufacturer IDs
 
 | ID     | Manufacturer |
-|--------|-------------|
+|--------|--------------|
 | `0x02` | Somfy        |
 
 ---
@@ -746,7 +747,7 @@ Frame:
   FP2:     00
   Seq:     12 34         (MSB first)
   HMAC:    ?? ?? ?? ?? ?? ??   (6 bytes, computed)
-  CRC:     ?? ??              (CRC-16/KERMIT, LSB first)
+  CRC:     ?? ??              (CRC-16/X.25, LSB first)
 ```
 
 ---
@@ -765,7 +766,7 @@ graph TD
     end
     subgraph L2["Data Link Layer"]
         FRM["Frame: CB0+CB1+Tgt+Src+CMD+Data+Auth+CRC"]
-        CRC["CRC-16/KERMIT"]
+        CRC["CRC-16/X.25"]
     end
     subgraph L1["Physical Layer"]
         UART["UART framing (start+8+stop bits)"]

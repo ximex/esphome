@@ -146,8 +146,19 @@ SequenceEntry *IOHomecontrol::get_sequence_entry_(uint32_t address) {
   new_entry.sequence = 0;
   new_entry.pref = global_preferences->make_preference<uint16_t>(pref_key);
   new_entry.pref.load(&new_entry.sequence);
+  if (this->sequence_entries_.size() >= MAX_SEQ_ENTRIES) {
+    // Evict oldest entry (index 0) when at capacity by shifting all entries down
+    ESP_LOGW(TAG, "Sequence table full (%u entries), evicting 0x%06X",
+             static_cast<unsigned>(this->sequence_entries_.size()), this->sequence_entries_[0].address);
+    // Shift entries down and overwrite the last slot
+    for (size_t i = 1; i < this->sequence_entries_.size(); i++) {
+      this->sequence_entries_[i - 1] = this->sequence_entries_[i];
+    }
+    this->sequence_entries_[this->sequence_entries_.size() - 1] = new_entry;
+    return &this->sequence_entries_[this->sequence_entries_.size() - 1];
+  }
   this->sequence_entries_.push_back(new_entry);
-  return &this->sequence_entries_.back();
+  return &this->sequence_entries_[this->sequence_entries_.size() - 1];
 }
 
 // ============================================================================
@@ -334,14 +345,15 @@ bool IOHomecontrol::transmit_serial_(const uint8_t *frame, size_t len) {
 #ifdef USE_ESP_IDF
   // Build TX buffer: preamble (0x55 × N) + sync (0xFF 0x33) + frame bytes
   // UART hardware adds start/stop bits around each byte automatically
+  static constexpr size_t TX_BUF_MAX = TX_PREAMBLE_BYTES + 2 + MAX_PACKET_SIZE;
   const size_t tx_len = TX_PREAMBLE_BYTES + 2 + len;
-  std::unique_ptr<uint8_t[]> tx_buf = std::make_unique<uint8_t[]>(tx_len);
+  std::array<uint8_t, TX_BUF_MAX> tx_buf{};
   for (size_t i = 0; i < TX_PREAMBLE_BYTES; i++) {
     tx_buf[i] = 0x55;
   }
   tx_buf[TX_PREAMBLE_BYTES] = TX_SYNC1;
   tx_buf[TX_PREAMBLE_BYTES + 1] = TX_SYNC2;
-  std::memcpy(tx_buf.get() + TX_PREAMBLE_BYTES + 2, frame, len);
+  std::memcpy(tx_buf.data() + TX_PREAMBLE_BYTES + 2, frame, len);
 
   // CC1101: enter IDLE (async serial mode PKT_FORMAT=3 is already set)
   this->radio_->go_idle();
@@ -351,7 +363,7 @@ bool IOHomecontrol::transmit_serial_(const uint8_t *frame, size_t len) {
                UART_PIN_NO_CHANGE);
 
   // Pre-load UART TX FIFO (returns immediately, hardware FIFO is 128 bytes)
-  uart_write_bytes(UART_PORT, tx_buf.get(), static_cast<int>(tx_len));
+  uart_write_bytes(UART_PORT, tx_buf.data(), static_cast<int>(tx_len));
 
   // CC1101: enter TX state — reads GDO0 serial input and modulates it
   this->radio_->go_tx();

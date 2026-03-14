@@ -2,10 +2,11 @@
 
 #include "esphome/components/cover/cover.h"
 #include "esphome/core/component.h"
-
-#include <vector>
+#include "esphome/core/helpers.h"
 
 namespace esphome::io_homecontrol {
+
+static constexpr size_t MAX_ADDRESSES = 4;  // Max source addresses per cover entity
 
 class IOHomecontrol;
 
@@ -34,7 +35,7 @@ class IOHomecontrolCover : public cover::Cover, public Component {
   void control(const cover::CoverCall &call) override;
 
   IOHomecontrol *parent_{nullptr};
-  std::vector<uint32_t> addresses_;
+  StaticVector<uint32_t, MAX_ADDRESSES> addresses_;
   uint32_t last_command_time_{0};
 };
 

@@ -73,9 +73,9 @@ static constexpr size_t SEND_KEY_MIN_SIZE = 31;
 // --- AES-128 ---
 static constexpr size_t KEY_SIZE = 16;
 
-// --- CRC-16/KERMIT ---
-static constexpr uint16_t KERMIT_INIT = 0x0000;
-static constexpr uint16_t KERMIT_POLY = 0x8408;
+// --- CRC-16/X.25 (init=0xFFFF, poly=0x8408 reflected, xorout=0xFFFF) ---
+static constexpr uint16_t CRC_INIT = 0xFFFF;
+static constexpr uint16_t CRC_POLY = 0x8408;
 
 // --- CtrlByte0 bit layout ---
 static constexpr uint8_t CTRL0_2W_BIT = 0x20;    // Bit 5: 0=1W, 1=2W

@@ -225,7 +225,7 @@ void IOHomecontrol::process_uart_rx_() {
 // ============================================================================
 
 uint16_t IOHomecontrol::compute_crc_(const uint8_t *data, size_t len) {
-  return crc16(data, static_cast<uint16_t>(len), KERMIT_INIT, KERMIT_POLY);
+  return crc16(data, static_cast<uint16_t>(len), KERMIT_INIT, KERMIT_POLY, true, true);
 }
 
 // ============================================================================

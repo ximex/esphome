@@ -21,6 +21,7 @@ class IOHomecontrolCover : public cover::Cover, public Component {
 
   void set_parent(IOHomecontrol *parent) { this->parent_ = parent; }
   void add_address(uint32_t address) { this->addresses_.push_back(address); }
+  void set_operation_timeout(uint32_t timeout_ms) { this->operation_timeout_ms_ = timeout_ms; }
 
   /// Primary source address used for TX (first configured address)
   uint32_t get_primary_address() const { return this->addresses_.empty() ? 0 : this->addresses_[0]; }
@@ -37,6 +38,7 @@ class IOHomecontrolCover : public cover::Cover, public Component {
   IOHomecontrol *parent_{nullptr};
   StaticVector<uint32_t, MAX_ADDRESSES> addresses_;
   uint32_t last_command_time_{0};
+  uint32_t operation_timeout_ms_{60000};
 };
 
 }  // namespace esphome::io_homecontrol

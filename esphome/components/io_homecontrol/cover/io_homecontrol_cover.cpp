@@ -22,12 +22,10 @@ void IOHomecontrolCover::setup() {
   }
 }
 
-static constexpr uint32_t OPERATION_TIMEOUT_MS = 60000;
-
 void IOHomecontrolCover::loop() {
   if (this->current_operation == cover::COVER_OPERATION_IDLE || this->last_command_time_ == 0)
     return;
-  if (millis() - this->last_command_time_ < OPERATION_TIMEOUT_MS)
+  if (millis() - this->last_command_time_ < this->operation_timeout_ms_)
     return;
 
   // No new command received within timeout — assume operation completed

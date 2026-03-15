@@ -10,6 +10,8 @@ from .. import (
     validate_address,
 )
 
+CONF_OPERATION_TIMEOUT = "operation_timeout"
+
 DEPENDENCIES = ["io_homecontrol"]
 
 IOHomecontrolCover = io_homecontrol_ns.class_(
@@ -22,6 +24,7 @@ CONFIG_SCHEMA = (
         {
             cv.GenerateID(CONF_IO_HOMECONTROL_ID): cv.use_id(IOHomecontrol),
             cv.Required(CONF_ADDRESS): cv.ensure_list(validate_address),
+            cv.Optional(CONF_OPERATION_TIMEOUT): cv.positive_time_period_milliseconds,
         },
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -37,3 +40,5 @@ async def to_code(config):
     cg.add(var.set_parent(hub))
     for addr in config[CONF_ADDRESS]:
         cg.add(var.add_address(addr))
+    if CONF_OPERATION_TIMEOUT in config:
+        cg.add(var.set_operation_timeout(config[CONF_OPERATION_TIMEOUT]))

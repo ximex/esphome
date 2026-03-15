@@ -580,17 +580,24 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
   frame[SEND_KEY_MIN_SIZE - 2] = crc & 0xFF;
   frame[SEND_KEY_MIN_SIZE - 1] = (crc >> 8) & 0xFF;
 
-  // Transmit SEND_KEY with repeats using async serial TX.
-  // Blocking delays here are acceptable — pairing is a rare manual operation
-  // and PAIR_1W must follow immediately after SEND_KEY completes.
+  // Transmit SEND_KEY with repeats on both 2W channels (CH3 + CH2).
+  // The remote transmits pairing frames on multiple channels — the motor may only
+  // listen on specific channels during learning mode.
+  // Blocking delays here are acceptable — pairing is a rare manual operation.
   ESP_LOGW(TAG, "PAIRING: Sending SEND_KEY to 0x%06X (seq=%u)", target_address, seq);
-  for (uint8_t i = 0; i < this->tx_repeats_; i++) {
-    if (!this->transmit_serial_(frame.data(), frame.size())) {
-      ESP_LOGE(TAG, "SEND_KEY transmit failed on repeat %u", i);
-      return false;
-    }
-    if (i < this->tx_repeats_ - 1) {
-      delay(TX_REPEAT_DELAY_MS);
+
+  static constexpr uint32_t PAIR_CHANNELS[] = {FREQ_CH3, FREQ_CH2};
+  for (uint32_t ch : PAIR_CHANNELS) {
+    this->radio_->set_frequency(static_cast<float>(ch));
+    this->current_freq_ = ch;
+    for (uint8_t i = 0; i < this->tx_repeats_; i++) {
+      if (!this->transmit_serial_(frame.data(), frame.size())) {
+        ESP_LOGE(TAG, "SEND_KEY transmit failed on repeat %u", i);
+        return false;
+      }
+      if (i < this->tx_repeats_ - 1) {
+        delay(TX_REPEAT_DELAY_MS);
+      }
     }
   }
 
@@ -603,17 +610,88 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
   // Brief pause between SEND_KEY and PAIR_1W
   delay(TX_REPEAT_DELAY_MS);
 
-  // Step 3: Send PAIR_1W (CMD 0x2E) - standard 1W frame WITH HMAC
+  // Step 3: Build PAIR_1W frame manually (CMD 0x2E) WITH HMAC.
+  // Must use 2W bit + order=3 in ctrl0 to match what the remote sends —
+  // the motor rejects pairing frames with 1W/order=0 ctrl0.
   uint8_t pair_data[1] = {0x00};
-  bool result =
-      this->send_1w_frame_(this->source_address_, target_address, Command::PAIR_1W, pair_data, sizeof(pair_data));
+  size_t pair_total = FRAME_HEADER_SIZE + sizeof(pair_data) + HMAC_AUTH_SIZE + CRC_SIZE;
+  size_t pair_frame_len = pair_total - CTRL0_L_EXCLUDED_BYTES;
+  std::array<uint8_t, MAX_PACKET_SIZE> pair_frame{};
 
-  if (result) {
-    ESP_LOGW(TAG, "PAIRING: Sent SEND_KEY + PAIR_1W successfully");
-    ESP_LOGW(TAG, "PAIRING: If motor jogs, pairing was successful!");
+  // CtrlByte0: 2W mode, order=3 (matching remote's pairing frames)
+  pair_frame[0] = (pair_frame_len & CTRL0_LEN_MASK) | CTRL0_2W_BIT | (3 << 6);
+  pair_frame[1] = 0x00;
+
+  // Target address
+  pair_frame[2] = (target_address >> 16) & 0xFF;
+  pair_frame[3] = (target_address >> 8) & 0xFF;
+  pair_frame[4] = target_address & 0xFF;
+
+  // Source address
+  pair_frame[5] = source_addr_3b[0];
+  pair_frame[6] = source_addr_3b[1];
+  pair_frame[7] = source_addr_3b[2];
+
+  // Command
+  pair_frame[8] = static_cast<uint8_t>(Command::PAIR_1W);
+
+  // Data
+  pair_frame[FRAME_HEADER_SIZE] = 0x00;
+
+  // HMAC over CMD + data
+  uint16_t pair_seq = own_entry->sequence;
+  uint8_t mac[MAC_SIZE];
+  this->compute_1w_hmac_(pair_frame.data() + FRAME_HEADER_SIZE - 1, 1 + sizeof(pair_data), pair_seq, mac);
+
+  // Sequence number (MSB first)
+  size_t auth_off = FRAME_HEADER_SIZE + sizeof(pair_data);
+  pair_frame[auth_off] = (pair_seq >> 8) & 0xFF;
+  pair_frame[auth_off + 1] = pair_seq & 0xFF;
+
+  // MAC
+  std::memcpy(pair_frame.data() + auth_off + SEQ_SIZE, mac, MAC_SIZE);
+
+  // CRC-16/KERMIT (LSB first)
+  size_t crc_off = pair_total - CRC_SIZE;
+  uint16_t pair_crc = compute_crc_(pair_frame.data(), crc_off);
+  pair_frame[crc_off] = pair_crc & 0xFF;
+  pair_frame[crc_off + 1] = (pair_crc >> 8) & 0xFF;
+
+  // Log the frame
+  char hex_buf[MAX_PACKET_SIZE * 2 + 1];
+  format_hex_to(hex_buf, pair_frame.data(), pair_total);
+  ESP_LOGI(TAG, "TX PAIR_1W frame: src=0x%06X -> target=0x%06X seq=%u len=%u", this->source_address_, target_address,
+           pair_seq, static_cast<unsigned>(pair_total));
+  ESP_LOGD(TAG, "  TX raw: %s", hex_buf);
+
+  // Transmit PAIR_1W on both channels with repeats
+  for (uint32_t ch : PAIR_CHANNELS) {
+    this->radio_->set_frequency(static_cast<float>(ch));
+    this->current_freq_ = ch;
+    for (uint8_t i = 0; i < this->tx_repeats_; i++) {
+      if (!this->transmit_serial_(pair_frame.data(), pair_total)) {
+        ESP_LOGE(TAG, "PAIR_1W transmit failed on repeat %u", i);
+        return false;
+      }
+      if (i < this->tx_repeats_ - 1) {
+        delay(TX_REPEAT_DELAY_MS);
+      }
+    }
   }
 
-  return result;
+  // Increment sequence for PAIR_1W
+  own_entry->sequence++;
+  own_entry->pref.save(&own_entry->sequence);
+  global_preferences->sync();
+
+  // Return to CH2 for normal operation
+  this->radio_->set_frequency(static_cast<float>(FREQ_CH2));
+  this->current_freq_ = FREQ_CH2;
+
+  ESP_LOGW(TAG, "PAIRING: Sent SEND_KEY + PAIR_1W successfully");
+  ESP_LOGW(TAG, "PAIRING: If motor jogs, pairing was successful!");
+
+  return true;
 }
 
 // ============================================================================

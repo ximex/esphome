@@ -57,6 +57,10 @@ static constexpr size_t FRAME_HEADER_SIZE =
 static constexpr size_t ADDRESS_SIZE = 3;
 static constexpr size_t CRC_SIZE = 2;
 static constexpr size_t SEQ_SIZE = 2;
+// Sequence number wrap-around detection: if stored seq is above this, and received is below SEQ_WRAP_LOW,
+// assume the remote wrapped from 65535 → 0 rather than replaying an old frame.
+static constexpr uint16_t SEQ_WRAP_HIGH = 0xFF00;
+static constexpr uint16_t SEQ_WRAP_LOW = 0x0100;
 static constexpr size_t MAC_SIZE = 6;
 static constexpr size_t HMAC_AUTH_SIZE = SEQ_SIZE + MAC_SIZE;  // Seq(2) + MAC(6) appended to 1W frames
 // CtrlByte0 length field: L = total_packet_size - CTRL0_L_EXCLUDED_BYTES
@@ -77,8 +81,10 @@ static constexpr uint16_t CRC_INIT = 0xFFFF;
 static constexpr uint16_t CRC_POLY = 0x8408;
 
 // --- CtrlByte0 bit layout ---
-static constexpr uint8_t CTRL0_2W_BIT = 0x20;    // Bit 5: 0=1W, 1=2W
-static constexpr uint8_t CTRL0_LEN_MASK = 0x1F;  // Bits 4-0: frame length
+static constexpr uint8_t CTRL0_2W_BIT = 0x20;      // Bit 5: 0=1W, 1=2W
+static constexpr uint8_t CTRL0_LEN_MASK = 0x1F;    // Bits 4-0: frame length
+static constexpr uint8_t CTRL0_ORDER_MASK = 0x03;  // Bits 7-6: frame order (after shifting)
+static constexpr uint8_t CTRL0_ORDER_SHIFT = 6;    // Bit position of order field
 
 // --- CtrlByte1 bit layout ---
 static constexpr uint8_t CTRL1_BEACON_BIT = 0x80;  // Bit 7: use beacon/repeater
@@ -92,13 +98,16 @@ static constexpr size_t HMAC_IV_DATA_BYTES = 8;  // Max cmd+data bytes copied in
 static constexpr uint8_t ORIGINATOR_USER = 0x01;
 static constexpr uint8_t ACEI_DEFAULT = 0x00;  // Access Control Extension & priority Info
 
+// --- Sync word (preamble terminator, used in both TX and RX) ---
+static constexpr uint8_t SYNC_BYTE_1 = 0xFF;  // First sync byte (preamble terminator start)
+static constexpr uint8_t SYNC_BYTE_2 = 0x33;  // Second sync byte (preamble terminator end)
+// Preamble byte: alternating bits for AGC lock + bit sync
+static constexpr uint8_t PREAMBLE_BYTE = 0x55;
+
 // --- TX timing ---
 static constexpr uint32_t TX_REPEAT_DELAY_MS = 40;
-// Preamble for async serial TX: 0x55 bytes (alternating bits) for AGC lock + bit sync
+// Number of preamble bytes for async serial TX
 static constexpr size_t TX_PREAMBLE_BYTES = 10;
-// Sync word bytes
-static constexpr uint8_t TX_SYNC1 = 0xFF;
-static constexpr uint8_t TX_SYNC2 = 0x33;
 
 // --- Addresses ---
 static constexpr uint32_t ADDR_BROADCAST = 0x00003F;

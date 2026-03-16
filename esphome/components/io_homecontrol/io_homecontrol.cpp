@@ -186,13 +186,13 @@ void IOHomecontrol::process_uart_rx_() {
 
     switch (this->rx_state_) {
       case RxState::WAITING_SYNC_FF:
-        if (byte == 0xFF) {
+        if (byte == SYNC_BYTE_1) {
           this->rx_state_ = RxState::WAITING_SYNC_33;
         }
         break;
 
       case RxState::WAITING_SYNC_33:
-        if (byte == 0x33) {
+        if (byte == SYNC_BYTE_2) {
           // Sync word detected — sample RSSI/LQI while signal is still present
           this->rx_rssi_ = this->radio_->read_rssi();
           this->rx_lqi_ = this->radio_->read_lqi();
@@ -205,7 +205,7 @@ void IOHomecontrol::process_uart_rx_() {
           this->rx_state_ = RxState::READING_HEADER;
           this->rx_buffer_len_ = 0;
           this->rx_frame_start_ = now;
-        } else if (byte == 0xFF) {
+        } else if (byte == SYNC_BYTE_1) {
           // Multiple 0xFF in a row — stay in this state
         } else {
           this->rx_state_ = RxState::WAITING_SYNC_FF;
@@ -347,10 +347,10 @@ bool IOHomecontrol::transmit_serial_(const uint8_t *frame, size_t len) {
   const size_t tx_len = TX_PREAMBLE_BYTES + 2 + len;
   std::array<uint8_t, TX_BUF_MAX> tx_buf{};
   for (size_t i = 0; i < TX_PREAMBLE_BYTES; i++) {
-    tx_buf[i] = 0x55;
+    tx_buf[i] = PREAMBLE_BYTE;
   }
-  tx_buf[TX_PREAMBLE_BYTES] = TX_SYNC1;
-  tx_buf[TX_PREAMBLE_BYTES + 1] = TX_SYNC2;
+  tx_buf[TX_PREAMBLE_BYTES] = SYNC_BYTE_1;
+  tx_buf[TX_PREAMBLE_BYTES + 1] = SYNC_BYTE_2;
   std::memcpy(tx_buf.data() + TX_PREAMBLE_BYTES + 2, frame, len);
 
   // CC1101: enter IDLE (async serial mode PKT_FORMAT=3 is already set)
@@ -544,8 +544,8 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
   std::array<uint8_t, SEND_KEY_MIN_SIZE> frame{};
 
   // L = total - 3 (excludes CtrlByte0 and CRC)
-  constexpr size_t send_key_frame_len = SEND_KEY_MIN_SIZE - CTRL0_L_EXCLUDED_BYTES;  // 31 - 3 = 28
-  frame[0] = (send_key_frame_len & CTRL0_LEN_MASK) | CTRL0_2W_BIT | (3 << 6);        // 2W mode, order=3
+  constexpr size_t send_key_frame_len = SEND_KEY_MIN_SIZE - CTRL0_L_EXCLUDED_BYTES;            // 31 - 3 = 28
+  frame[0] = (send_key_frame_len & CTRL0_LEN_MASK) | CTRL0_2W_BIT | (3 << CTRL0_ORDER_SHIFT);  // 2W mode, order=3
   frame[1] = 0x00;
 
   // Target address — wire format: [CB0][CB1][Target 3B][Source 3B]
@@ -617,7 +617,7 @@ bool IOHomecontrol::send_pair(uint32_t target_address) {
   std::array<uint8_t, MAX_PACKET_SIZE> pair_frame{};
 
   // CtrlByte0: 2W mode, order=3 (matching remote's pairing frames)
-  pair_frame[0] = (pair_frame_len & CTRL0_LEN_MASK) | CTRL0_2W_BIT | (3 << 6);
+  pair_frame[0] = (pair_frame_len & CTRL0_LEN_MASK) | CTRL0_2W_BIT | (3 << CTRL0_ORDER_SHIFT);
   pair_frame[1] = 0x00;
 
   // Target address
@@ -769,7 +769,7 @@ void IOHomecontrol::parse_frame_(const uint8_t *packet, size_t packet_size) {
   // Parse control bytes
   uint8_t ctrl1 = packet[1];
 
-  uint8_t order = (ctrl0 >> 6) & 0x03;  // Used in logging only; multi-frame reassembly (2W) not yet implemented
+  uint8_t order = (ctrl0 >> CTRL0_ORDER_SHIFT) & CTRL0_ORDER_MASK;  // Logging only; multi-frame reassembly not yet impl
   bool is_1w = !(ctrl0 & CTRL0_2W_BIT);
 
   bool use_beacon = ctrl1 & CTRL1_BEACON_BIT;
@@ -920,7 +920,7 @@ void IOHomecontrol::parse_frame_(const uint8_t *packet, size_t packet_size) {
     // the remote likely wrapped from 65535 to 0. Accept the new value in that case.
     auto *seq_entry = this->get_sequence_entry_(source);
     uint16_t old_seq = seq_entry->sequence;
-    bool seq_advanced = (seq >= seq_entry->sequence) || (seq_entry->sequence > 0xFF00 && seq < 0x0100);
+    bool seq_advanced = (seq >= seq_entry->sequence) || (seq_entry->sequence > SEQ_WRAP_HIGH && seq < SEQ_WRAP_LOW);
     if (seq_advanced) {
       seq_entry->sequence = seq + 1;
       seq_entry->pref.save(&seq_entry->sequence);

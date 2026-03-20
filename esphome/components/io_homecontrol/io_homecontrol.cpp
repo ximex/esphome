@@ -196,12 +196,6 @@ void IOHomecontrol::process_uart_rx_() {
           // Sync word detected — sample RSSI/LQI while signal is still present
           this->rx_rssi_ = this->radio_->read_rssi();
           this->rx_lqi_ = this->radio_->read_lqi();
-          // Reject weak signals immediately before committing to frame assembly
-          if (this->rx_rssi_ < this->min_rssi_) {
-            ESP_LOGD(TAG, "Sync rejected: RSSI=%.1fdBm below threshold %.1fdBm", this->rx_rssi_, this->min_rssi_);
-            this->rx_state_ = RxState::WAITING_SYNC_FF;
-            break;
-          }
           this->rx_state_ = RxState::READING_HEADER;
           this->rx_buffer_len_ = 0;
           this->rx_frame_start_ = now;
@@ -213,6 +207,14 @@ void IOHomecontrol::process_uart_rx_() {
         break;
 
       case RxState::READING_HEADER: {
+        // First byte after sync is CtrlByte0 — check RSSI before committing to frame
+        if (this->rx_rssi_ < this->min_rssi_) {
+          ESP_LOGD(TAG, "Frame rejected: RSSI=%.1fdBm below threshold %.1fdBm (ctrl0=0x%02X)", this->rx_rssi_,
+                   this->min_rssi_, byte);
+          this->rx_state_ = RxState::WAITING_SYNC_FF;
+          break;
+        }
+
         this->rx_buffer_[this->rx_buffer_len_++] = byte;
         size_t frame_len_field = byte & CTRL0_LEN_MASK;
         this->rx_expected_len_ = frame_len_field + CTRL0_L_EXCLUDED_BYTES;

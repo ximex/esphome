@@ -211,8 +211,8 @@ void IOHomecontrol::process_uart_rx_() {
         if (this->rx_rssi_ < this->min_rssi_) {
           ESP_LOGD(TAG, "Frame rejected: RSSI=%.1fdBm below threshold %.1fdBm (ctrl0=0x%02X)", this->rx_rssi_,
                    this->min_rssi_, byte);
-          this->rx_state_ = RxState::WAITING_SYNC_FF;
-          break;
+          // this->rx_state_ = RxState::WAITING_SYNC_FF;
+          // break;
         }
 
         this->rx_buffer_[this->rx_buffer_len_++] = byte;

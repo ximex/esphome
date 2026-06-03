@@ -27,8 +27,10 @@ void DaikinAltherma::dump_config() {
   LOG_SENSOR("  ", "0x20[8:9] Outdoor Heat Exchanger Mid Temperature",
              this->outdoor_heat_exchanger_mid_temperature_sensor_);
   LOG_SENSOR("  ", "0x20[10:11] Liquid Pipe Temperature", this->r20_liquid_pipe_temperature_sensor_);
-  LOG_SENSOR("  ", "0x20[12:13] Unknown Temperature/Pressure", this->r20_1213_unknown_sensor_);
+  LOG_SENSOR("  ", "0x20[12:13] High Pressure", this->r20_high_pressure_sensor_);
   LOG_SENSOR("  ", "0x20[14:15] Low Pressure", this->r20_low_pressure_sensor_);
+  LOG_SENSOR("  ", "Condensing Temperature (R32 sat. from high pressure)", this->condensing_temperature_sensor_);
+  LOG_SENSOR("  ", "Evaporating Temperature (R32 sat. from low pressure)", this->evaporating_temperature_sensor_);
   LOG_SENSOR("  ", "0x20[16] Unknown", this->r20_16_unknown_sensor_);
   // Register 0x21
   LOG_SENSOR("  ", "0x21[0:1] INV Primary Current", this->inv_primary_current_sensor_);
@@ -43,7 +45,7 @@ void DaikinAltherma::dump_config() {
   // Register 0x60
   LOG_SENSOR("  ", "0x60[1] Indoor Unit Address", this->r60_indoor_unit_address_sensor_);
   LOG_SENSOR("  ", "0x60[3] Indoor Error Code", this->indoor_error_code_sensor_);
-  LOG_SENSOR("  ", "0x60[4] Indoor Unit Code", this->indoor_unit_code_sensor_);
+  LOG_SENSOR("  ", "0x60[4] Indoor Error Detailed Code", this->indoor_error_detailed_code_sensor_);
   LOG_SENSOR("  ", "0x60[5] Indoor Error Type", this->indoor_error_type_sensor_);
   LOG_SENSOR("  ", "0x60[6] Indoor Unit Capacity", this->indoor_unit_capacity_sensor_);
   LOG_SENSOR("  ", "0x60[7:8] DHW Tank Setpoint", this->dhw_tank_setpoint_sensor_);
@@ -253,8 +255,11 @@ void DaikinAltherma::loop() {
       if (this->rx_pos_ < frame_len)
         continue;
 
-      // Complete frame received - Log frame
-      ESP_LOGV(TAG, "RX: [%s]", format_hex_pretty(this->rx_buf_.data(), frame_len, ':').c_str());
+        // Complete frame received - Log frame
+#if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_VERBOSE
+      char rx_hex[format_hex_pretty_size(sizeof(this->rx_buf_))];
+      ESP_LOGV(TAG, "RX: [%s]", format_hex_pretty_to(rx_hex, this->rx_buf_.data(), frame_len, ':'));
+#endif
 
       // Validate checksum
       uint8_t expected_crc = checksum_(this->rx_buf_.data(), frame_len - 1);
@@ -290,7 +295,10 @@ void DaikinAltherma::send_request_(Register reg) {
   uint8_t request[4] = {0x03, 0x40, static_cast<uint8_t>(reg), 0x00};
   request[3] = checksum_(request, 3);
 
-  ESP_LOGV(TAG, "TX: [%s]", format_hex_pretty(request, sizeof(request), ':').c_str());
+#if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_VERBOSE
+  char tx_hex[format_hex_pretty_size(sizeof(request))];
+  ESP_LOGV(TAG, "TX: [%s]", format_hex_pretty_to(tx_hex, request, sizeof(request), ':'));
+#endif
 
   this->write_array(request, sizeof(request));
   this->flush();
@@ -371,10 +379,21 @@ float DaikinAltherma::decode_int16_div10_(const uint8_t *data) {
   return raw * 0.1f;
 }
 
-float DaikinAltherma::decode_uint16_div10_(const uint8_t *data) {
-  // Little-endian unsigned 16-bit, divided by 10
-  uint16_t raw = static_cast<uint16_t>(data[0] | (data[1] << 8));
-  return raw * 0.1f;
+float DaikinAltherma::decode_press2temp_r32_(const uint8_t *data) {
+  // ESPAltherma converter 405: pressure (int16 LE * 0.1 bar) -> R32 saturation temperature (degC)
+  // via 6th-order polynomial. Returns NAN when no valid pressure (compressor off / register zeroed).
+  double p = decode_int16_div10_(data);
+  if (p <= 0.0)
+    return NAN;
+  // Horner form of the ESPAltherma R32 polynomial
+  double t =
+      ((((((-2.6989493795556E-07 * p + 4.26383417104661E-05) * p - 0.00262978346547749) * p + 0.0805858127503585) * p -
+         1.31924457284073) *
+            p +
+        13.4157368435437) *
+           p -
+       51.1813342993155);
+  return static_cast<float>(t);
 }
 
 float DaikinAltherma::decode_fixed_point_le_(const uint8_t *data) {
@@ -611,8 +630,8 @@ void DaikinAltherma::parse_0x20_outdoor_temperature_(const uint8_t *data, uint8_
   // [6:7]   = Suction pipe temperature (int16 LE * 0.1 degC)
   // [8:9]   = Outdoor heat exchanger mid temperature (int16 LE * 0.1 degC)
   // [10:11] = Liquid pipe temperature (R6T) (int16 LE * 0.1 degC)
-  // [12:13] = INV fin/Heat sink temperature/High Pressure (int16 LE * 0.1 degC|kg/cm²)
-  // [14:15] = (Low?) Pressure (int16 LE * 0.1 kg/cm²)
+  // [12:13] = High Pressure (int16 LE * 0.1 bar)
+  // [14:15] = Low Pressure (int16 LE * 0.1 bar)
   // [16]    = Unknown byte
 #ifdef USE_TEXT_SENSOR
   if (this->raw_0x20_text_sensor_ != nullptr)
@@ -631,10 +650,14 @@ void DaikinAltherma::parse_0x20_outdoor_temperature_(const uint8_t *data, uint8_
     this->outdoor_heat_exchanger_mid_temperature_sensor_->publish_state(decode_int16_div10_(data + 8));
   if (this->r20_liquid_pipe_temperature_sensor_ != nullptr)
     this->r20_liquid_pipe_temperature_sensor_->publish_state(decode_int16_div10_(data + 10));
-  if (this->r20_1213_unknown_sensor_ != nullptr)
-    this->r20_1213_unknown_sensor_->publish_state(decode_int16_div10_(data + 12));
+  if (this->r20_high_pressure_sensor_ != nullptr)
+    this->r20_high_pressure_sensor_->publish_state(decode_int16_div10_(data + 12));
   if (this->r20_low_pressure_sensor_ != nullptr)
     this->r20_low_pressure_sensor_->publish_state(decode_int16_div10_(data + 14));
+  if (this->condensing_temperature_sensor_ != nullptr)
+    this->condensing_temperature_sensor_->publish_state(decode_press2temp_r32_(data + 12));
+  if (this->evaporating_temperature_sensor_ != nullptr)
+    this->evaporating_temperature_sensor_->publish_state(decode_press2temp_r32_(data + 14));
   if (this->r20_16_unknown_sensor_ != nullptr)
     this->r20_16_unknown_sensor_->publish_state(data[16]);
 #endif
@@ -666,7 +689,7 @@ void DaikinAltherma::parse_0x21_unknown_(const uint8_t *data, uint8_t data_len) 
 void DaikinAltherma::parse_0x30_outdoor_unit_(const uint8_t *data, uint8_t data_len) {
   // [0]   = Compressor frequency (rps/Hz)
   // [1]   = Fan speed (step)
-  // [3:4] = Expansion valve pulses (int16 LE)
+  // [3:4] = Expansion valve pulses (uint16 LE, no scaling)
   // [5]   = Unknown byte
   // [11]  = Outdoor unit flags (bit7: four way valve state)
   // [13]  = Outdoor unit flags (bit5: Y3S, bit6: LP bypass valve Y2S, bit7: hot gas bypass valve Y3S)
@@ -686,8 +709,7 @@ void DaikinAltherma::parse_0x30_outdoor_unit_(const uint8_t *data, uint8_t data_
   if (this->fan_speed_sensor_ != nullptr)
     this->fan_speed_sensor_->publish_state(data[1]);
   if (this->expansion_valve_pulses_sensor_ != nullptr)
-    this->expansion_valve_pulses_sensor_->publish_state(decode_int16_div10_(data + 3) *
-                                                        10);  // TODO: check if *10 is needed
+    this->expansion_valve_pulses_sensor_->publish_state(static_cast<uint16_t>(data[3] | (data[4] << 8)));
   if (this->r30_05_unknown_sensor_ != nullptr)
     this->r30_05_unknown_sensor_->publish_state(data[5]);
 #endif
@@ -710,7 +732,7 @@ void DaikinAltherma::parse_0x60_indoor_control_(const uint8_t *data, uint8_t dat
   //          bits 0-3: flags (bit0=freeze prot water piping, bit1=silent, bit2=freeze prot, bit3=thermostat)
   //          bits 4-7: operation mode (0=stop, 1=heating, 2=cooling, 4=DHW, 5=heating+DHW, 6=cooling+DHW)
   // [3]    = Error Code
-  // [4]    = Indoor Unit Code
+  // [4]    = Error Detailed Code
   // [5]    = Error Type
   // [6]    = Indoor Unit Capacity
   // [7:8]  = DHW tank setpoint (int16 LE * 0.1 degC) // FIX
@@ -750,8 +772,8 @@ void DaikinAltherma::parse_0x60_indoor_control_(const uint8_t *data, uint8_t dat
     this->r60_indoor_unit_address_sensor_->publish_state(data[1]);
   if (this->indoor_error_code_sensor_ != nullptr)
     this->indoor_error_code_sensor_->publish_state(data[3]);
-  if (this->indoor_unit_code_sensor_ != nullptr)
-    this->indoor_unit_code_sensor_->publish_state(data[4]);
+  if (this->indoor_error_detailed_code_sensor_ != nullptr)
+    this->indoor_error_detailed_code_sensor_->publish_state(data[4]);
   if (this->indoor_error_type_sensor_ != nullptr)
     this->indoor_error_type_sensor_->publish_state(data[5]);
   if (this->indoor_unit_capacity_sensor_ != nullptr)
@@ -964,9 +986,9 @@ void DaikinAltherma::parse_0x65_indoor_outlet_(const uint8_t *data, uint8_t data
 }
 
 void DaikinAltherma::parse_0xa0_outdoor_refrigerant_(const uint8_t *data, uint8_t data_len) {
-  // [0:1]   = Suction temperature (int16 LE * 0.1 degC)
-  // [2:3]   = Outdoor heat exchanger temperature (int16 LE * 0.1 degC)
-  // [4:5]   = Liquid pipe temperature (int16 LE * 0.1 degC)
+  // [0:1]   = Suction temperature (fixed-point: integer=data[1], frac=(data[0]&0x7F)/256; {0x00,0x80}=N/A)
+  // [2:3]   = Outdoor heat exchanger temperature (fixed-point: integer=data[1], frac=data[0]/256; {0x00,0x80}=N/A)
+  // [4:5]   = Liquid pipe temperature (fixed-point: integer=data[1], frac=data[0]/256; {0x00,0x80}=N/A)
   // [6:7]   = Pressure (fixed-point: integer=data[1], frac=(data[0]&0x7F)/256; {0x00,0x80}=N/A)
   // [8:9]   = Expansion valve 3 (int16 LE)
   // [14:15] = Compressor port temperature (int16 LE * 0.1 degC)
@@ -977,11 +999,11 @@ void DaikinAltherma::parse_0xa0_outdoor_refrigerant_(const uint8_t *data, uint8_
 #endif
 #ifdef USE_SENSOR
   if (this->suction_temperature_sensor_ != nullptr)
-    this->suction_temperature_sensor_->publish_state(decode_int16_div10_(data + 0));
+    this->suction_temperature_sensor_->publish_state(decode_fixed_point_le_(data + 0));
   if (this->ra0_outdoor_heat_exchanger_temperature_sensor_ != nullptr)
-    this->ra0_outdoor_heat_exchanger_temperature_sensor_->publish_state(decode_int16_div10_(data + 2));
+    this->ra0_outdoor_heat_exchanger_temperature_sensor_->publish_state(decode_fixed_point_le_(data + 2));
   if (this->ra0_liquid_pipe_temperature_sensor_ != nullptr)
-    this->ra0_liquid_pipe_temperature_sensor_->publish_state(decode_int16_div10_(data + 4));
+    this->ra0_liquid_pipe_temperature_sensor_->publish_state(decode_fixed_point_le_(data + 4));
   if (this->ra0_pressure_sensor_ != nullptr)
     this->ra0_pressure_sensor_->publish_state(decode_fixed_point_le_(data + 6));
   if (this->expansion_valve_3_sensor_ != nullptr)

@@ -54,8 +54,14 @@ CONF_OUTDOOR_HEAT_EXCHANGER_MID_TEMPERATURE = (
     "outdoor_heat_exchanger_mid_temperature"  # 0x20[8:9]
 )
 CONF_0X20_LIQUID_PIPE_TEMPERATURE = "0x20_liquid_pipe_temperature"  # 0x20[10:11]
-CONF_0X20_1213_UNKNOWN = "0x20_1213_unknown"  # 0x20[12:13]
+CONF_0X20_HIGH_PRESSURE = "0x20_high_pressure"  # 0x20[12:13]
 CONF_0X20_LOW_PRESSURE = "0x20_low_pressure"  # 0x20[14:15]
+CONF_CONDENSING_TEMPERATURE = (
+    "condensing_temperature"  # derived from 0x20[12:13] (R32 sat.)
+)
+CONF_EVAPORATING_TEMPERATURE = (
+    "evaporating_temperature"  # derived from 0x20[14:15] (R32 sat.)
+)
 CONF_0X20_16_UNKNOWN = "0x20_16_unknown"  # 0x20[16]
 # Register 0x21
 CONF_INV_PRIMARY_CURRENT = "inv_primary_current"  # 0x21[0:1]
@@ -74,7 +80,7 @@ CONF_HOT_GAS_BYPASS_VALVE = "hot_gas_bypass_valve"  # 0x30[13] bit7
 # Register 0x60 - Indoor operation control
 CONF_0X60_INDOOR_UNIT_ADDRESS = "0x60_indoor_unit_address"  # 0x60[1]
 CONF_INDOOR_ERROR_CODE = "indoor_error_code"  # 0x60[3]
-CONF_INDOOR_UNIT_CODE = "indoor_unit_code"  # 0x60[4]
+CONF_INDOOR_ERROR_DETAILED_CODE = "indoor_error_detailed_code"  # 0x60[4]
 CONF_INDOOR_ERROR_TYPE = "indoor_error_type"  # 0x60[5]
 CONF_INDOOR_UNIT_CAPACITY = "indoor_unit_capacity"  # 0x60[6]
 CONF_DHW_TANK_SETPOINT = "dhw_tank_setpoint"  # 0x60[7:8]
@@ -281,9 +287,12 @@ CONFIG_SCHEMA = (
                 device_class=DEVICE_CLASS_TEMPERATURE,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_0X20_1213_UNKNOWN): sensor.sensor_schema(  # 0x20[12:13]
+            cv.Optional(CONF_0X20_HIGH_PRESSURE): sensor.sensor_schema(  # 0x20[12:13]
+                unit_of_measurement=UNIT_BAR,
                 accuracy_decimals=1,
+                device_class=DEVICE_CLASS_PRESSURE,
                 state_class=STATE_CLASS_MEASUREMENT,
+                icon=ICON_GAUGE,
             ),
             cv.Optional(CONF_0X20_LOW_PRESSURE): sensor.sensor_schema(  # 0x20[14:15]
                 unit_of_measurement=UNIT_BAR,
@@ -291,6 +300,22 @@ CONFIG_SCHEMA = (
                 device_class=DEVICE_CLASS_PRESSURE,
                 state_class=STATE_CLASS_MEASUREMENT,
                 icon=ICON_GAUGE,
+            ),
+            cv.Optional(
+                CONF_CONDENSING_TEMPERATURE
+            ): sensor.sensor_schema(  # derived from 0x20[12:13]
+                unit_of_measurement=UNIT_CELSIUS,
+                accuracy_decimals=1,
+                device_class=DEVICE_CLASS_TEMPERATURE,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(
+                CONF_EVAPORATING_TEMPERATURE
+            ): sensor.sensor_schema(  # derived from 0x20[14:15]
+                unit_of_measurement=UNIT_CELSIUS,
+                accuracy_decimals=1,
+                device_class=DEVICE_CLASS_TEMPERATURE,
+                state_class=STATE_CLASS_MEASUREMENT,
             ),
             cv.Optional(CONF_0X20_16_UNKNOWN): sensor.sensor_schema(  # 0x20[16]
                 accuracy_decimals=0,
@@ -356,10 +381,12 @@ CONFIG_SCHEMA = (
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
                 icon=ICON_ALERT,
             ),
-            cv.Optional(CONF_INDOOR_UNIT_CODE): sensor.sensor_schema(  # 0x60[4]
+            cv.Optional(
+                CONF_INDOOR_ERROR_DETAILED_CODE
+            ): sensor.sensor_schema(  # 0x60[4]
                 accuracy_decimals=0,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-                icon=ICON_INFO,
+                icon=ICON_ALERT,
             ),
             cv.Optional(CONF_INDOOR_ERROR_TYPE): sensor.sensor_schema(  # 0x60[5]
                 accuracy_decimals=0,
@@ -929,8 +956,16 @@ async def to_code(config):
             CONF_0X20_LIQUID_PIPE_TEMPERATURE,
             "set_0x20_liquid_pipe_temperature_sensor",
         ),  # 0x20[10:11]
-        (CONF_0X20_1213_UNKNOWN, "set_0x20_1213_unknown_sensor"),  # 0x20[12:13]
+        (CONF_0X20_HIGH_PRESSURE, "set_0x20_high_pressure_sensor"),  # 0x20[12:13]
         (CONF_0X20_LOW_PRESSURE, "set_0x20_low_pressure_sensor"),  # 0x20[14:15]
+        (
+            CONF_CONDENSING_TEMPERATURE,
+            "set_condensing_temperature_sensor",
+        ),  # derived 0x20[12:13]
+        (
+            CONF_EVAPORATING_TEMPERATURE,
+            "set_evaporating_temperature_sensor",
+        ),  # derived 0x20[14:15]
         (CONF_0X20_16_UNKNOWN, "set_0x20_16_unknown_sensor"),  # 0x20[16]
         # Register 0x21
         (CONF_INV_PRIMARY_CURRENT, "set_inv_primary_current_sensor"),  # 0x21[0:1]
@@ -948,7 +983,10 @@ async def to_code(config):
             "set_0x60_indoor_unit_address_sensor",
         ),  # 0x60[1]
         (CONF_INDOOR_ERROR_CODE, "set_indoor_error_code_sensor"),  # 0x60[3]
-        (CONF_INDOOR_UNIT_CODE, "set_indoor_unit_code_sensor"),  # 0x60[4]
+        (
+            CONF_INDOOR_ERROR_DETAILED_CODE,
+            "set_indoor_error_detailed_code_sensor",
+        ),  # 0x60[4]
         (CONF_INDOOR_ERROR_TYPE, "set_indoor_error_type_sensor"),  # 0x60[5]
         (CONF_INDOOR_UNIT_CAPACITY, "set_indoor_unit_capacity_sensor"),  # 0x60[6]
         (CONF_DHW_TANK_SETPOINT, "set_dhw_tank_setpoint_sensor"),  # 0x60[7:8]

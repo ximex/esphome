@@ -79,10 +79,14 @@ daikin_altherma:
     name: "Outdoor Heat Exchanger Mid Temperature"
   0x20_liquid_pipe_temperature:  # 0x20[10:11]
     name: "0x20 Liquid Pipe Temperature"
-  0x20_1213_unknown:  # 0x20[12:13]
-    name: "0x20 Unknown Temperature|Pressure"
+  0x20_high_pressure:  # 0x20[12:13]
+    name: "0x20 High Pressure"
   0x20_low_pressure:  # 0x20[14:15]
     name: "0x20 Low Pressure"
+  condensing_temperature:  # derived from 0x20[12:13] high pressure (R32 saturation)
+    name: "Condensing Temperature"
+  evaporating_temperature:  # derived from 0x20[14:15] low pressure (R32 saturation)
+    name: "Evaporating Temperature"
   0x20_16_unknown:  # 0x20[16]
     name: "0x20 Byte 16 Unknown"
   raw_0x20:  # 0x20 raw (Full supported)
@@ -144,8 +148,8 @@ daikin_altherma:
     name: "Indoor Operation Mode"
   indoor_error_code:  # 0x60[3]
     name: "Indoor Error Code"
-  indoor_unit_code:  # 0x60[4]
-    name: "Indoor Unit Code"
+  indoor_error_detailed_code:  # 0x60[4]
+    name: "Indoor Error Detailed Code"
   indoor_error_type:  # 0x60[5]
     name: "Indoor Error Type"
   indoor_unit_capacity:  # 0x60[6]

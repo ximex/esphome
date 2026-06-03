@@ -76,10 +76,16 @@ class DaikinAltherma : public PollingComponent, public uart::UARTDevice {
   }  // 0x20[8:9]
   void set_0x20_liquid_pipe_temperature_sensor(sensor::Sensor *s) {
     this->r20_liquid_pipe_temperature_sensor_ = s;
-  }                                                                                             // 0x20[10:11]
-  void set_0x20_1213_unknown_sensor(sensor::Sensor *s) { this->r20_1213_unknown_sensor_ = s; }  // 0x20[12:13]
-  void set_0x20_low_pressure_sensor(sensor::Sensor *s) { this->r20_low_pressure_sensor_ = s; }  // 0x20[14:15]
-  void set_0x20_16_unknown_sensor(sensor::Sensor *s) { this->r20_16_unknown_sensor_ = s; }      // 0x20[16]
+  }                                                                                               // 0x20[10:11]
+  void set_0x20_high_pressure_sensor(sensor::Sensor *s) { this->r20_high_pressure_sensor_ = s; }  // 0x20[12:13]
+  void set_0x20_low_pressure_sensor(sensor::Sensor *s) { this->r20_low_pressure_sensor_ = s; }    // 0x20[14:15]
+  void set_condensing_temperature_sensor(sensor::Sensor *s) {
+    this->condensing_temperature_sensor_ = s;
+  }  // derived from 0x20[12:13] high pressure (R32 sat.)
+  void set_evaporating_temperature_sensor(sensor::Sensor *s) {
+    this->evaporating_temperature_sensor_ = s;
+  }  // derived from 0x20[14:15] low pressure (R32 sat.)
+  void set_0x20_16_unknown_sensor(sensor::Sensor *s) { this->r20_16_unknown_sensor_ = s; }  // 0x20[16]
   // Register 0x21
   void set_inv_primary_current_sensor(sensor::Sensor *s) { this->inv_primary_current_sensor_ = s; }      // 0x21[0:1]
   void set_inv_secondary_current_sensor(sensor::Sensor *s) { this->inv_secondary_current_sensor_ = s; }  // 0x21[2:3]
@@ -93,10 +99,12 @@ class DaikinAltherma : public PollingComponent, public uart::UARTDevice {
   // Register 0x60
   void set_0x60_indoor_unit_address_sensor(sensor::Sensor *s) { this->r60_indoor_unit_address_sensor_ = s; }  // 0x60[1]
   void set_indoor_error_code_sensor(sensor::Sensor *s) { this->indoor_error_code_sensor_ = s; }               // 0x60[3]
-  void set_indoor_unit_code_sensor(sensor::Sensor *s) { this->indoor_unit_code_sensor_ = s; }                 // 0x60[4]
-  void set_indoor_error_type_sensor(sensor::Sensor *s) { this->indoor_error_type_sensor_ = s; }               // 0x60[5]
-  void set_indoor_unit_capacity_sensor(sensor::Sensor *s) { this->indoor_unit_capacity_sensor_ = s; }         // 0x60[6]
-  void set_dhw_tank_setpoint_sensor(sensor::Sensor *s) { this->dhw_tank_setpoint_sensor_ = s; }  // 0x60[7:8]
+  void set_indoor_error_detailed_code_sensor(sensor::Sensor *s) {
+    this->indoor_error_detailed_code_sensor_ = s;
+  }                                                                                                    // 0x60[4]
+  void set_indoor_error_type_sensor(sensor::Sensor *s) { this->indoor_error_type_sensor_ = s; }        // 0x60[5]
+  void set_indoor_unit_capacity_sensor(sensor::Sensor *s) { this->indoor_unit_capacity_sensor_ = s; }  // 0x60[6]
+  void set_dhw_tank_setpoint_sensor(sensor::Sensor *s) { this->dhw_tank_setpoint_sensor_ = s; }        // 0x60[7:8]
   void set_0x60_leaving_water_setpoint_sensor(sensor::Sensor *s) {
     this->r60_leaving_water_setpoint_sensor_ = s;
   }                                                                                                // 0x60[9:10]
@@ -363,7 +371,7 @@ class DaikinAltherma : public PollingComponent, public uart::UARTDevice {
   static std::string format_hex_masked_(const uint8_t *data, uint8_t len, std::initializer_list<uint8_t> mask_indices);
   static std::string format_bits_masked_(uint8_t value, std::initializer_list<uint8_t> known_bits);
   static float decode_int16_div10_(const uint8_t *data);
-  static float decode_uint16_div10_(const uint8_t *data);
+  static float decode_press2temp_r32_(const uint8_t *data);
   static float decode_fixed_point_le_(const uint8_t *data);
   static float decode_fixed_point_signed_le_x10_(const uint8_t *data);
   static const char *decode_0x10_operation_mode_(uint8_t mode_byte);
@@ -414,8 +422,10 @@ class DaikinAltherma : public PollingComponent, public uart::UARTDevice {
   sensor::Sensor *suction_pipe_temperature_sensor_{nullptr};                // 0x20[6:7]
   sensor::Sensor *outdoor_heat_exchanger_mid_temperature_sensor_{nullptr};  // 0x20[8:9]
   sensor::Sensor *r20_liquid_pipe_temperature_sensor_{nullptr};             // 0x20[10:11]
-  sensor::Sensor *r20_1213_unknown_sensor_{nullptr};                        // 0x20[12:13]
+  sensor::Sensor *r20_high_pressure_sensor_{nullptr};                       // 0x20[12:13]
   sensor::Sensor *r20_low_pressure_sensor_{nullptr};                        // 0x20[14:15]
+  sensor::Sensor *condensing_temperature_sensor_{nullptr};                  // derived: 0x20[12:13] -> R32 sat.
+  sensor::Sensor *evaporating_temperature_sensor_{nullptr};                 // derived: 0x20[14:15] -> R32 sat.
   sensor::Sensor *r20_16_unknown_sensor_{nullptr};                          // 0x20[16]
   // Register 0x21
   sensor::Sensor *inv_primary_current_sensor_{nullptr};    // 0x21[0:1]
@@ -430,7 +440,7 @@ class DaikinAltherma : public PollingComponent, public uart::UARTDevice {
   // Register 0x60
   sensor::Sensor *r60_indoor_unit_address_sensor_{nullptr};     // 0x60[1]
   sensor::Sensor *indoor_error_code_sensor_{nullptr};           // 0x60[3]
-  sensor::Sensor *indoor_unit_code_sensor_{nullptr};            // 0x60[4]
+  sensor::Sensor *indoor_error_detailed_code_sensor_{nullptr};  // 0x60[4]
   sensor::Sensor *indoor_error_type_sensor_{nullptr};           // 0x60[5]
   sensor::Sensor *indoor_unit_capacity_sensor_{nullptr};        // 0x60[6]
   sensor::Sensor *dhw_tank_setpoint_sensor_{nullptr};           // 0x60[7:8]

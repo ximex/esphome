@@ -272,6 +272,8 @@ daikin_altherma:
   0x63_indoor_unit_address:  # 0x63[1]
     name: "0x63 Indoor Unit Address"
     disabled_by_default: true
+  indoor_eeprom:  # 0x63[2:7]
+    name: "Indoor EEPROM"
   raw_0x63:  # 0x63 raw
     name: "Raw 0x63"
 

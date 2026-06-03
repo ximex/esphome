@@ -161,6 +161,8 @@ void DaikinAltherma::dump_config() {
   LOG_TEXT_SENSOR("  ", "0x62[2] Flags", this->r62_02_flags_text_sensor_);
   LOG_TEXT_SENSOR("  ", "0x62[7] Flags", this->r62_07_flags_text_sensor_);
   LOG_TEXT_SENSOR("  ", "0x62[8] Flags", this->r62_08_flags_text_sensor_);
+  // Register 0x63
+  LOG_TEXT_SENSOR("  ", "0x63[2:7] Indoor EEPROM", this->indoor_eeprom_text_sensor_);
   // Raw register dumps
   LOG_TEXT_SENSOR("  ", "0x00 Raw", this->raw_0x00_text_sensor_);
   LOG_TEXT_SENSOR("  ", "0x10 Raw", this->raw_0x10_text_sensor_);
@@ -371,6 +373,16 @@ std::string DaikinAltherma::format_bits_masked_(uint8_t value, std::initializer_
     }
   }
   return result;
+}
+
+std::string DaikinAltherma::format_indoor_eeprom_(const uint8_t *data) {
+  // Indoor unit EEPROM number, e.g. "1709433-12C". data points at 0x63[2]:
+  // data[0:4] are BCD digit pairs, data[5] is the revision letter (1=A, 2=B, 3=C, ...).
+  char rev = (data[5] >= 1 && data[5] <= 26) ? static_cast<char>('A' + data[5] - 1) : '?';
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%d%d%d%d%d%d%d-%d%d%c", data[0] & 0x0F, data[1] >> 4, data[1] & 0x0F, data[2] >> 4,
+           data[2] & 0x0F, data[3] >> 4, data[3] & 0x0F, data[4] >> 4, data[4] & 0x0F, rev);
+  return buf;
 }
 
 float DaikinAltherma::decode_int16_div10_(const uint8_t *data) {
@@ -923,11 +935,14 @@ void DaikinAltherma::parse_0x62_control_flow_(const uint8_t *data, uint8_t data_
 }
 
 void DaikinAltherma::parse_0x63_unknown_(const uint8_t *data, uint8_t data_len) {
-  // [0] = bit7: Data Enable/Disable
-  // [1] = Indoor Unit Address
+  // [0]   = bit7: Data Enable/Disable
+  // [1]   = Indoor Unit Address
+  // [2:7] = Indoor Unit EEPROM number (BCD digit pairs + revision letter)
 #ifdef USE_TEXT_SENSOR
   if (this->raw_0x63_text_sensor_ != nullptr)
-    this->raw_0x63_text_sensor_->publish_state(format_hex_masked_(data, data_len, {0, 1}));
+    this->raw_0x63_text_sensor_->publish_state(format_hex_masked_(data, data_len, {0, 1, 2, 3, 4, 5, 6, 7}));
+  if (this->indoor_eeprom_text_sensor_ != nullptr && data_len > 7)
+    this->indoor_eeprom_text_sensor_->publish_state(format_indoor_eeprom_(data + 2));
 #endif
 #ifdef USE_BINARY_SENSOR
   if (this->r63_data_enabled_binary_sensor_ != nullptr)

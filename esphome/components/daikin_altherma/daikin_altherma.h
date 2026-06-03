@@ -331,6 +331,8 @@ class DaikinAltherma : public PollingComponent, public uart::UARTDevice {
   void set_0x62_08_flags_text_sensor(text_sensor::TextSensor *s) {
     this->r62_08_flags_text_sensor_ = s;
   }  // 0x62[8] flags
+  // Register 0x63
+  void set_indoor_eeprom_text_sensor(text_sensor::TextSensor *s) { this->indoor_eeprom_text_sensor_ = s; }  // 0x63[2:7]
   // Raw register dumps
   void set_raw_0x00_text_sensor(text_sensor::TextSensor *s) { this->raw_0x00_text_sensor_ = s; }  // 0x00 raw
   void set_raw_0x10_text_sensor(text_sensor::TextSensor *s) { this->raw_0x10_text_sensor_ = s; }  // 0x10 raw
@@ -370,6 +372,7 @@ class DaikinAltherma : public PollingComponent, public uart::UARTDevice {
   static uint8_t checksum_(const uint8_t *data, uint8_t len);
   static std::string format_hex_masked_(const uint8_t *data, uint8_t len, std::initializer_list<uint8_t> mask_indices);
   static std::string format_bits_masked_(uint8_t value, std::initializer_list<uint8_t> known_bits);
+  static std::string format_indoor_eeprom_(const uint8_t *data);
   static float decode_int16_div10_(const uint8_t *data);
   static float decode_press2temp_r32_(const uint8_t *data);
   static float decode_fixed_point_le_(const uint8_t *data);
@@ -554,6 +557,8 @@ class DaikinAltherma : public PollingComponent, public uart::UARTDevice {
   text_sensor::TextSensor *r62_02_flags_text_sensor_{nullptr};  // 0x62[2] flags
   text_sensor::TextSensor *r62_07_flags_text_sensor_{nullptr};  // 0x62[7] flags
   text_sensor::TextSensor *r62_08_flags_text_sensor_{nullptr};  // 0x62[8] flags
+  // Register 0x63
+  text_sensor::TextSensor *indoor_eeprom_text_sensor_{nullptr};  // 0x63[2:7]
   // Raw register dumps
   text_sensor::TextSensor *raw_0x00_text_sensor_{nullptr};  // 0x00 raw
   text_sensor::TextSensor *raw_0x10_text_sensor_{nullptr};  // 0x10 raw

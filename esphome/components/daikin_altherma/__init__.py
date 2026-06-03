@@ -111,6 +111,7 @@ CONF_WATER_PRESSURE = "water_pressure"  # 0x62[11]
 CONF_PUMP_SPEED = "pump_speed"  # 0x62[12]
 # Register 0x63
 CONF_0X63_INDOOR_UNIT_ADDRESS = "0x63_indoor_unit_address"  # 0x63[1]
+CONF_INDOOR_EEPROM = "indoor_eeprom"  # 0x63[2:7]
 # Register 0x64
 CONF_0X64_INDOOR_UNIT_ADDRESS = "0x64_indoor_unit_address"  # 0x64[1]
 CONF_0X64_0708_UNKNOWN = "0x64_0708_unknown"  # 0x64[7:8]
@@ -865,6 +866,13 @@ CONFIG_SCHEMA = (
             ): text_sensor.text_sensor_schema(  # 0x62[8] flags
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
+            # Register 0x63
+            cv.Optional(
+                CONF_INDOOR_EEPROM
+            ): text_sensor.text_sensor_schema(  # 0x63[2:7]
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                icon=ICON_INFO,
+            ),
             # Raw register dumps (diagnostic)
             cv.Optional(CONF_RAW_0X00): text_sensor.text_sensor_schema(  # 0x00 raw
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
@@ -1216,6 +1224,8 @@ async def to_code(config):
         (CONF_0X62_02_FLAGS, "set_0x62_02_flags_text_sensor"),  # 0x62[2] flags
         (CONF_0X62_07_FLAGS, "set_0x62_07_flags_text_sensor"),  # 0x62[7] flags
         (CONF_0X62_08_FLAGS, "set_0x62_08_flags_text_sensor"),  # 0x62[8] flags
+        # Register 0x63
+        (CONF_INDOOR_EEPROM, "set_indoor_eeprom_text_sensor"),  # 0x63[2:7]
         # Raw register dumps
         (CONF_RAW_0X00, "set_raw_0x00_text_sensor"),  # 0x00 raw
         (CONF_RAW_0X10, "set_raw_0x10_text_sensor"),  # 0x10 raw

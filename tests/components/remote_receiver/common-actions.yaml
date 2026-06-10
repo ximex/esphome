@@ -83,6 +83,11 @@ on_lg:
     - logger.log:
         format: "on_lg: %lu %u"
         args: ["long(x.data)", "x.nbits"]
+on_lifta:
+  then:
+    - logger.log:
+        format: "on_lifta: 0x%08lX %u"
+        args: ["(unsigned long) x.code", "(unsigned) x.command"]
 on_magiquest:
   then:
     - logger.log:

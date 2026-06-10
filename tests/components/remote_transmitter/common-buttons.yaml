@@ -52,6 +52,12 @@ button:
         data: 4294967295
         nbits: 28
   - platform: template
+    name: Lifta
+    on_press:
+      remote_transmitter.transmit_lifta:
+        code: 0x80205878
+        command: UP
+  - platform: template
     name: Samsung
     on_press:
       remote_transmitter.transmit_samsung:

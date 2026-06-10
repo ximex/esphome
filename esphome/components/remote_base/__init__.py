@@ -768,6 +768,74 @@ async def lg_action(var, config, args):
     cg.add(var.set_nbits(template_))
 
 
+# Lifta
+LiftaData, LiftaBinarySensor, LiftaTrigger, LiftaAction, LiftaDumper = declare_protocol(
+    "Lifta"
+)
+
+LIFTA_RESERVED_MASK = 0x06000001  # command bits 26-25 and the padding bit 0
+LiftaCommand = ns.enum("LiftaCommand", is_class=True)
+LIFTA_COMMANDS = {
+    "UP": LiftaCommand.UP,
+    "DOWN": LiftaCommand.DOWN,
+    "BEACON": LiftaCommand.BEACON,
+}
+
+
+def validate_lifta_code(value):
+    """Validate a 31-bit Lifta frame, left-aligned in 32 bits.
+
+    The command bits (26-25) and the padding bit (0) must be zero; the
+    direction is set separately via the command option.
+    """
+    value = cv.hex_uint32_t(value)
+    if value & LIFTA_RESERVED_MASK:
+        raise cv.Invalid(
+            "The command bits (26-25) and the padding bit (0) of 'code' must be "
+            "zero; set the direction via 'command' instead"
+        )
+    return value
+
+
+LIFTA_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_CODE): validate_lifta_code,
+        cv.Required(CONF_COMMAND): cv.enum(LIFTA_COMMANDS, upper=True),
+    }
+)
+
+
+@register_binary_sensor("lifta", LiftaBinarySensor, LIFTA_SCHEMA)
+def lifta_binary_sensor(var, config):
+    cg.add(
+        var.set_data(
+            cg.StructInitializer(
+                LiftaData,
+                ("code", config[CONF_CODE]),
+                ("command", config[CONF_COMMAND]),
+            )
+        )
+    )
+
+
+@register_trigger("lifta", LiftaTrigger, LiftaData)
+def lifta_trigger(var, config):
+    pass
+
+
+@register_dumper("lifta", LiftaDumper)
+def lifta_dumper(var, config):
+    pass
+
+
+@register_action("lifta", LiftaAction, LIFTA_SCHEMA)
+async def lifta_action(var, config, args):
+    template_ = await cg.templatable(config[CONF_CODE], args, cg.uint32)
+    cg.add(var.set_code(template_))
+    template_ = await cg.templatable(config[CONF_COMMAND], args, LiftaCommand)
+    cg.add(var.set_command(template_))
+
+
 # MagiQuest
 (
     MagiQuestData,

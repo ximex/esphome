@@ -1,0 +1,17 @@
+cover:
+  - platform: lifta
+    name: Stairlift
+    code: 0x80205878
+    open_duration: 105s
+    close_duration: 105s
+    frame_interval: 150ms
+    timeout_margin: 15s
+    transmitter_id: xmitr
+    receiver_id: rcvr
+  - platform: lifta
+    name: Stairlift Percentage Margin
+    code: 0x80205876
+    open_duration: 2min
+    close_duration: 2min
+    timeout_margin: 10%
+    transmitter_id: xmitr

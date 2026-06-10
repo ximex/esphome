@@ -11,6 +11,8 @@ AUTO_LOAD = ["remote_base"]
 CONF_FRAME_INTERVAL = "frame_interval"
 CONF_TIMEOUT_MARGIN = "timeout_margin"
 
+ICON_ELEVATOR_PASSENGER = "mdi:elevator-passenger"
+
 LiftaCover = lifta_ns.class_(
     "LiftaCover",
     cover.Cover,
@@ -20,7 +22,7 @@ LiftaCover = lifta_ns.class_(
 )
 
 CONFIG_SCHEMA = (
-    cover.cover_schema(LiftaCover)
+    cover.cover_schema(LiftaCover, icon=ICON_ELEVATOR_PASSENGER)
     .extend(
         {
             cv.Required(CONF_CODE): remote_base.validate_lifta_code,

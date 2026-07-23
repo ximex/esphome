@@ -379,7 +379,8 @@ std::string DaikinAltherma::format_indoor_eeprom_(const uint8_t *data) {
   // Indoor unit EEPROM number, e.g. "1709433-12C". data points at 0x63[2]:
   // data[0:4] are BCD digit pairs, data[5] is the revision letter (1=A, 2=B, 3=C, ...).
   char rev = (data[5] >= 1 && data[5] <= 26) ? static_cast<char>('A' + data[5] - 1) : '?';
-  char buf[16];
+  // 9 nibbles (each 0-15, so up to 2 chars) + '-' + revision char + null terminator
+  char buf[21];
   snprintf(buf, sizeof(buf), "%d%d%d%d%d%d%d-%d%d%c", data[0] & 0x0F, data[1] >> 4, data[1] & 0x0F, data[2] >> 4,
            data[2] & 0x0F, data[3] >> 4, data[3] & 0x0F, data[4] >> 4, data[4] & 0x0F, rev);
   return buf;

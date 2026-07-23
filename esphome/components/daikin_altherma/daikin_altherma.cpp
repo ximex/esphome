@@ -881,7 +881,7 @@ void DaikinAltherma::parse_0x62_control_flow_(const uint8_t *data, uint8_t data_
   // [5:6]  = Room temperature setpoint (int16 LE * 0.1 degC)
   // [7]    = Unknown flags
   // [8]    = Output flags (bit0=space H operation output, bit5=unknown)
-  // [9:10] = Flow sensor (B2L) (int16 LE * 0.1 l/min) // FIX {Durchflussmenge}
+  // [9:10] = Flow sensor (B2L) (int16 LE * 0.1 L/min) // FIX {Durchflussmenge}
   // [11]   = Water pressure (B1PW) (int16 LE * 0.1 kg/cm²) // FIX {Wasserdruck}
   // [12]   = Pump speed signal (0=max, 100=stop)
   // [13]   = 3 way Valve Mixing 1

@@ -202,7 +202,7 @@ CONF_RAW_0XA1 = "raw_0xa1"  # 0xA1 raw
 
 # Units
 UNIT_BAR = "bar"
-UNIT_LITERS_PER_MINUTE = "l/min"
+UNIT_LITERS_PER_MINUTE = "L/min"
 
 # Icons
 ICON_ALERT = "mdi:alert-circle-outline"

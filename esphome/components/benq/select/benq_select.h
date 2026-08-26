@@ -6,20 +6,17 @@
 
 namespace esphome::benq {
 
-class BenqSelect : public select::Select, public Component {
+class BenqSelect : public select::Select, public Component, public BenqEntity {
  public:
-  void dump_config() override;
+  BenqSelect(BenQ *parent, BenqCommand command) : BenqEntity(parent, command), parent_(parent) {}
 
-  void set_parent(BenQ *parent) { this->parent_ = parent; }
-  void set_command(BenqCommand command) { this->command_ = command; }
-  BenqCommand get_command() const { return this->command_; }
-  void handle_response(const BenqResponse &response);
+  void dump_config() override;
+  void handle_response(const BenqResponse &response) override;
 
  protected:
   void control(const std::string &value) override;
 
-  BenQ *parent_{nullptr};
-  BenqCommand command_{BenqCommand::MAX_COMMAND};
+  BenQ *parent_;
 };
 
 }  // namespace esphome::benq

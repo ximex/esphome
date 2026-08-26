@@ -10,6 +10,26 @@ switch:
     name: "Blank Screen"
     command: BLANK
 
+select:
   - platform: benq
-    name: "Mute Audio"
-    command: MUTE
+    name: "Input Source"
+    command: SOURCE
+
+number:
+  - platform: benq
+    name: "Brightness"
+    command: BRIGHTNESS
+
+sensor:
+  - platform: benq
+    name: "Lamp Hours"
+    command: LAMP_TIME
+
+button:
+  - platform: benq
+    name: "Menu Enter"
+    command: ENTER
+
+media_player:
+  - platform: benq
+    name: "BenQ Projector"

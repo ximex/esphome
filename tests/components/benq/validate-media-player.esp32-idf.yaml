@@ -1,3 +1,3 @@
 packages:
   uart: !include ../../test_build_components/common/uart/esp32-idf.yaml
-  base: !include common_media_player.yaml
+  base: !include common-media-player.yaml

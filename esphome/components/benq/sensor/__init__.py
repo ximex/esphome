@@ -16,15 +16,24 @@ from esphome.const import (
 )
 from esphome.types import ConfigType
 
-from .. import BENQ_COMMANDS, CONF_BENQ_ID, BenQ, benq_ns
+from .. import BENQ_COMMANDS, CONF_BENQ_ID, BenQ, apply_command_defaults, benq_ns
 
 DEPENDENCIES = ["benq"]
 CODEOWNERS = ["@ximex"]
 
 BenqSensor = benq_ns.class_("BenqSensor", sensor.Sensor, cg.Component)
 
-# Per-command defaults. The schema itself cannot carry these, because the
-# applicable values depend on the command that the user selects.
+# Only commands that answer with a number can drive a sensor; anything else
+# would publish "unknown" forever.
+SENSOR_COMMANDS = (
+    "LAMP_TIME",
+    "VOLUME",
+    "CONTRAST",
+    "BRIGHTNESS",
+    "COLOR",
+    "SHARPNESS",
+)
+
 SENSOR_COMMAND_DEFAULTS = {
     "LAMP_TIME": {
         CONF_UNIT_OF_MEASUREMENT: UNIT_HOUR,
@@ -36,32 +45,18 @@ SENSOR_COMMAND_DEFAULTS = {
     },
 }
 
-
-def _apply_defaults(config: ConfigType) -> ConfigType:
-    # Runs before the schema, so the injected values pass through the regular
-    # validators. state_class in particular is turned into an enum there, and a
-    # raw string would end up in the generated C++ and fail to compile.
-    if isinstance(command := config.get(CONF_COMMAND), str):
-        for key, value in SENSOR_COMMAND_DEFAULTS.get(command.upper(), {}).items():
-            config.setdefault(key, value)
-    return config
-
-
 CONFIG_SCHEMA = cv.All(
-    _apply_defaults,
+    apply_command_defaults(SENSOR_COMMAND_DEFAULTS),
     sensor.sensor_schema(BenqSensor).extend(
         {
             cv.GenerateID(CONF_BENQ_ID): cv.use_id(BenQ),
-            cv.Required(CONF_COMMAND): cv.one_of(*BENQ_COMMANDS, upper=True),
+            cv.Required(CONF_COMMAND): cv.one_of(*SENSOR_COMMANDS, upper=True),
         }
     ),
 )
 
 
 async def to_code(config: ConfigType) -> None:
-    var = await sensor.new_sensor(config)
-    await cg.register_component(var, config)
     parent = await cg.get_variable(config[CONF_BENQ_ID])
-    cg.add(var.set_parent(parent))
-    cg.add(var.set_command(BENQ_COMMANDS[config[CONF_COMMAND]]))
-    cg.add(parent.register_sensor(var))
+    var = await sensor.new_sensor(config, parent, BENQ_COMMANDS[config[CONF_COMMAND]])
+    await cg.register_component(var, config)

@@ -1,6 +1,7 @@
 benq:
   model: SP840
   update_interval: 60s
+  command_timeout: 5s
 
 switch:
   - platform: benq
@@ -19,6 +20,10 @@ switch:
     name: "Freeze Image"
     command: FREEZE
 
+  - platform: benq
+    name: "On Screen Menu"
+    command: MENU
+
 select:
   - platform: benq
     name: "Input Source"
@@ -31,6 +36,10 @@ select:
   - platform: benq
     name: "Lamp Mode"
     command: LAMP_MODE
+
+  - platform: benq
+    name: "Aspect Ratio"
+    command: ASPECT_RATIO
 
 number:
   - platform: benq
@@ -46,13 +55,34 @@ number:
     command: CONTRAST
 
   - platform: benq
+    name: "Color"
+    command: COLOR
+
+  - platform: benq
     name: "Sharpness"
     command: SHARPNESS
 
+# More sensors than the old fixed capacity of four, to prove none get dropped
 sensor:
   - platform: benq
     name: "Lamp Hours"
     command: LAMP_TIME
+
+  - platform: benq
+    name: "Volume Level"
+    command: VOLUME
+
+  - platform: benq
+    name: "Brightness Level"
+    command: BRIGHTNESS
+
+  - platform: benq
+    name: "Contrast Level"
+    command: CONTRAST
+
+  - platform: benq
+    name: "Color Level"
+    command: COLOR
 
 button:
   - platform: benq
@@ -70,3 +100,9 @@ button:
   - platform: benq
     name: "Reset Lamp Hours"
     command: LAMP_HOUR_RESET
+
+  # A command without a platform of its own, sent through the escape hatch
+  - platform: benq
+    name: "Set 115200 Baud"
+    command: BAUD_RATE
+    value: "115200"

@@ -15,8 +15,7 @@ void BenqSwitch::handle_response(const BenqResponse &response) {
     return;
   }
   if (response.success) {
-    bool new_state = (strcasecmp(response.value, "on") == 0);
-    this->publish_state(new_state);
+    this->publish_state(strcasecmp(response.value, "on") == 0);
   }
 }
 

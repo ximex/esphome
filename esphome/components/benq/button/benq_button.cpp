@@ -12,10 +12,6 @@ void BenqButton::dump_config() {
   }
 }
 
-void BenqButton::press_action() {
-  if (this->parent_ != nullptr) {
-    this->parent_->send_command(this->command_, this->value_[0] != '\0' ? this->value_ : "");
-  }
-}
+void BenqButton::press_action() { this->parent_->send_command(this->command_, this->value_); }
 
 }  // namespace esphome::benq

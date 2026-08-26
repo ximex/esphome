@@ -1,0 +1,8 @@
+# The media player on its own has to be able to power the projector and step
+# the volume without any other benq entity present.
+benq:
+  model: SP840
+
+media_player:
+  - platform: benq
+    name: "BenQ Projector"

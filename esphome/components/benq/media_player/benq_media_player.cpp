@@ -1,29 +1,44 @@
 #include "benq_media_player.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
-#include <cstdio>
+#include <algorithm>
+#include <cmath>
 
 namespace esphome::benq {
 
 static const char *const TAG = "benq.media_player";
 
-void BenqMediaPlayer::setup() {
+void BenqMediaPlayer::dump_config() { ESP_LOGCONFIG(TAG, "BenQ Media Player"); }
+
+void BenqMediaPlayer::query_state() {
   this->parent_->query_command(BenqCommand::POWER);
   this->parent_->query_command(BenqCommand::VOLUME);
   this->parent_->query_command(BenqCommand::MUTE);
-  this->parent_->query_command(BenqCommand::SOURCE);
 }
-
-void BenqMediaPlayer::dump_config() { ESP_LOGCONFIG(TAG, "BenQ Media Player"); }
 
 media_player::MediaPlayerTraits BenqMediaPlayer::get_traits() {
   auto traits = media_player::MediaPlayerTraits();
-  traits.set_supports_pause(false);
+  // A projector has no media library or transport, so drop the playback
+  // features the base set assumes and add the ones it really has.
+  traits.clear_feature_flags(
+      media_player::MediaPlayerEntityFeature::PLAY_MEDIA | media_player::MediaPlayerEntityFeature::BROWSE_MEDIA |
+      media_player::MediaPlayerEntityFeature::STOP | media_player::MediaPlayerEntityFeature::MEDIA_ANNOUNCE);
+  traits.add_feature_flags(media_player::MediaPlayerEntityFeature::TURN_ON |
+                           media_player::MediaPlayerEntityFeature::TURN_OFF |
+                           media_player::MediaPlayerEntityFeature::VOLUME_STEP);
   return traits;
 }
 
 void BenqMediaPlayer::handle_response(BenqCommand cmd, const BenqResponse &response) {
-  if (response.is_error || !response.success) {
+  if (cmd != BenqCommand::POWER && cmd != BenqCommand::VOLUME && cmd != BenqCommand::MUTE) {
+    return;
+  }
+  if (response.is_error) {
+    ESP_LOGW(TAG, "'%s': projector rejected %s: %s", this->get_name().c_str(), BenQ::get_command_name(cmd),
+             response.error_message);
+    return;
+  }
+  if (!response.success) {
     return;
   }
 
@@ -33,15 +48,14 @@ void BenqMediaPlayer::handle_response(BenqCommand cmd, const BenqResponse &respo
       break;
     case BenqCommand::VOLUME: {
       auto parsed = parse_number<int>(response.value);
-      if (parsed.has_value()) {
-        this->volume_ = parsed.value() / 10.0f;
+      if (!parsed.has_value()) {
+        return;
       }
+      this->volume = std::clamp(parsed.value() / static_cast<float>(BenQ::VOLUME_MAX), 0.0f, 1.0f);
       break;
     }
     case BenqCommand::MUTE:
       this->is_muted_ = (strcasecmp(response.value, "on") == 0);
-      break;
-    case BenqCommand::SOURCE:
       break;
     default:
       return;
@@ -62,10 +76,10 @@ void BenqMediaPlayer::control(const media_player::MediaPlayerCall &call) {
         this->parent_->send_command(BenqCommand::POWER, this->is_on_ ? "off" : "on");
         break;
       case media_player::MEDIA_PLAYER_COMMAND_VOLUME_UP:
-        this->parent_->send_command(BenqCommand::VOLUME, "+");
+        this->parent_->nudge_volume(1);
         break;
       case media_player::MEDIA_PLAYER_COMMAND_VOLUME_DOWN:
-        this->parent_->send_command(BenqCommand::VOLUME, "-");
+        this->parent_->nudge_volume(-1);
         break;
       case media_player::MEDIA_PLAYER_COMMAND_MUTE:
         this->parent_->send_command(BenqCommand::MUTE, "on");
@@ -79,23 +93,20 @@ void BenqMediaPlayer::control(const media_player::MediaPlayerCall &call) {
   }
 
   if (call.get_volume().has_value()) {
-    int benq_volume = static_cast<int>(call.get_volume().value() * 10.0f);
-    char buffer[8];
-    snprintf(buffer, sizeof(buffer), "%d", benq_volume);
-    this->parent_->send_command(BenqCommand::VOLUME, buffer);
-  }
-
-  if (call.get_media_url().has_value()) {
-    const std::string &source = call.get_media_url().value();
-    char buffer[16];
-    str_to_lower_buf(buffer, sizeof(buffer), source.c_str(), source.size());
-    this->parent_->send_command(BenqCommand::SOURCE, buffer);
+    this->parent_->set_volume(static_cast<int8_t>(lroundf(call.get_volume().value() * BenQ::VOLUME_MAX)));
   }
 }
 
 void BenqMediaPlayer::update_state_() {
-  this->state = this->is_on_ ? media_player::MEDIA_PLAYER_STATE_ON : media_player::MEDIA_PLAYER_STATE_OFF;
-  this->volume = this->volume_;
+  auto new_state = this->is_on_ ? media_player::MEDIA_PLAYER_STATE_ON : media_player::MEDIA_PLAYER_STATE_OFF;
+  // publish_state() notifies every controller, so only speak up on a change
+  if (new_state == this->state && this->volume == this->published_volume_ &&
+      this->is_muted_ == this->published_muted_) {
+    return;
+  }
+  this->state = new_state;
+  this->published_volume_ = this->volume;
+  this->published_muted_ = this->is_muted_;
   this->publish_state();
 }
 

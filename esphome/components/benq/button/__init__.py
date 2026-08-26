@@ -2,8 +2,9 @@ import esphome.codegen as cg
 from esphome.components import button
 import esphome.config_validation as cv
 from esphome.const import CONF_COMMAND, CONF_ICON, CONF_VALUE
+from esphome.types import ConfigType
 
-from .. import BENQ_COMMANDS, CONF_BENQ_ID, BenQ, benq_ns
+from .. import BENQ_COMMANDS, CONF_BENQ_ID, BenQ, apply_command_defaults, benq_ns
 
 DEPENDENCIES = ["benq"]
 CODEOWNERS = ["@ximex"]
@@ -11,26 +12,20 @@ CODEOWNERS = ["@ximex"]
 BenqButton = benq_ns.class_("BenqButton", button.Button, cg.Component)
 
 BUTTON_COMMAND_DEFAULTS = {
-    "UP": {"icon": "mdi:arrow-up"},
-    "DOWN": {"icon": "mdi:arrow-down"},
-    "LEFT": {"icon": "mdi:arrow-left"},
-    "RIGHT": {"icon": "mdi:arrow-right"},
-    "ENTER": {"icon": "mdi:keyboard-return"},
-    "AUTO": {"icon": "mdi:auto-fix"},
-    "LAMP_HOUR_RESET": {"icon": "mdi:restart"},
+    "UP": {CONF_ICON: "mdi:arrow-up"},
+    "DOWN": {CONF_ICON: "mdi:arrow-down"},
+    "LEFT": {CONF_ICON: "mdi:arrow-left"},
+    "RIGHT": {CONF_ICON: "mdi:arrow-right"},
+    "ENTER": {CONF_ICON: "mdi:keyboard-return"},
+    "AUTO": {CONF_ICON: "mdi:auto-fix"},
+    "LAMP_HOUR_RESET": {CONF_ICON: "mdi:restart"},
 }
 
-
-def _apply_defaults(config):
-    cmd = config.get(CONF_COMMAND)
-    if cmd in BUTTON_COMMAND_DEFAULTS:
-        defaults = BUTTON_COMMAND_DEFAULTS[cmd]
-        if CONF_ICON not in config:
-            config[CONF_ICON] = defaults["icon"]
-    return config
-
-
+# Unlike the other platforms, a button accepts every command. Sending one is
+# always harmless, and together with ``value`` this is the escape hatch for
+# commands that have no platform of their own.
 CONFIG_SCHEMA = cv.All(
+    apply_command_defaults(BUTTON_COMMAND_DEFAULTS),
     button.button_schema(BenqButton).extend(
         {
             cv.GenerateID(CONF_BENQ_ID): cv.use_id(BenQ),
@@ -38,15 +33,12 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_VALUE): cv.string,
         }
     ),
-    _apply_defaults,
 )
 
 
-async def to_code(config):
-    var = await button.new_button(config)
-    await cg.register_component(var, config)
+async def to_code(config: ConfigType) -> None:
     parent = await cg.get_variable(config[CONF_BENQ_ID])
-    cg.add(var.set_parent(parent))
-    cg.add(var.set_command(BENQ_COMMANDS[config[CONF_COMMAND]]))
+    var = await button.new_button(config, parent, BENQ_COMMANDS[config[CONF_COMMAND]])
+    await cg.register_component(var, config)
     if value := config.get(CONF_VALUE):
         cg.add(var.set_value(value))
